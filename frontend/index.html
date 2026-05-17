@@ -79,7 +79,7 @@
     />
     <link
       rel="stylesheet"
-      href="css/styles.css?v=20260517-approval-procedure-scale-01"
+      href="css/styles.css?v=20260517-org-tabs-restore-01"
     />
     <link
       rel="stylesheet"
@@ -1667,7 +1667,7 @@
                   type="button"
                   data-action="requests-quick-leave"
                 >
-                  휴가 신청
+                  휴가 등록
                 </button>
                 <button
                   class="btn btn-secondary hidden"
@@ -1919,6 +1919,10 @@
                   현황, 사용 이력, 부여, 설정을 한 화면에서 관리합니다.
                 </p>
               </div>
+              <div
+                id="leaveStatusHeadActionMount"
+                class="workspace-head-actions leave-status-head-actions hidden"
+              ></div>
             </div>
             <section id="leaveModule" class="leave-module">
               <p
@@ -1973,7 +1977,7 @@
                       type="button"
                       data-action="leave-workspace-toggle-composer"
                     >
-                      휴가 신청
+                      휴가 등록
                     </button>
                   </div>
                 </div>
@@ -2410,20 +2414,116 @@
                     class="leave-usage-summary-strip"
                     aria-live="polite"
                   ></div>
-                  <article id="leaveUsageGridCard" class="module-card stack">
+                  <article
+                    id="leaveStatusFilterCard"
+                    class="module-card leave-status-filter-card"
+                    aria-label="휴가 현황 필터"
+                  >
+                    <div class="leave-status-filter-row">
+                      <label
+                        class="input-field leave-filter-field leave-inline-search leave-status-search-field"
+                      >
+                        <span>검색</span>
+                        <input
+                          id="leaveUsageSearch"
+                          type="search"
+                          placeholder="이름, 사번, 근무지 검색"
+                        />
+                      </label>
+                      <label
+                        class="input-field leave-filter-field leave-filter-field-company"
+                      >
+                        <span>회사</span>
+                        <select id="leaveUsageTenantFilter">
+                          <option value="all">전체 회사</option>
+                        </select>
+                      </label>
+                      <label
+                        class="input-field leave-filter-field leave-filter-field-site"
+                      >
+                        <span>근무지</span>
+                        <select id="leaveUsageSiteFilter">
+                          <option value="all">전체 근무지</option>
+                        </select>
+                      </label>
+                      <label
+                        class="input-field leave-filter-field leave-filter-field-policy"
+                      >
+                        <span>휴가 유형</span>
+                        <select id="leaveUsagePolicyFilter">
+                          <option value="all">전체 휴가 유형</option>
+                        </select>
+                      </label>
+                      <label
+                        class="input-field leave-filter-field leave-filter-field-status"
+                      >
+                        <span>상태</span>
+                        <select id="leaveUsageStatusFilter">
+                          <option value="all">전체 상태</option>
+                          <option value="approved">승인</option>
+                          <option value="pending">승인대기</option>
+                          <option value="rejected">반려</option>
+                          <option value="cancelled">취소</option>
+                        </select>
+                      </label>
+                      <div
+                        class="leave-filter-field leave-filter-field-range leave-status-range-field"
+                      >
+                        <span>기간</span>
+                        <button
+                          id="leaveStatusRangeTrigger"
+                          class="btn btn-secondary leave-range-trigger"
+                          type="button"
+                          data-action="requests-open-filter"
+                        >
+                          <span id="leaveStatusRangeLabel"
+                            >2024-05-01 ~ 2024-05-31</span
+                          >
+                          <i data-lucide="calendar-days" aria-hidden="true"></i>
+                        </button>
+                      </div>
+                      <button
+                        id="leaveStatusRefreshButton"
+                        class="btn btn-secondary leave-status-refresh-button"
+                        type="button"
+                        data-action="leave-refresh-current-view"
+                      >
+                        <i data-lucide="refresh-cw" aria-hidden="true"></i>
+                        <span>새로고침</span>
+                      </button>
+                    </div>
+                  </article>
+                  <div
+                    id="leaveStatusContentGrid"
+                    class="leave-status-content-grid"
+                  >
+                  <article
+                    id="leaveUsageGridCard"
+                    class="module-card stack leave-status-table-card"
+                  >
                     <div class="requests-list-head leave-status-list-head">
                       <div class="requests-heading-block">
-                        <h3>휴가 현황</h3>
+                        <h3>휴가 현황 목록</h3>
                       </div>
                       <div class="leave-status-list-actions">
-                        <span
-                          id="leaveUsageCount"
-                          class="status-pill status-pill-neutral"
-                          >0명</span
+                        <button
+                          class="btn btn-secondary leave-status-list-action"
+                          type="button"
+                          data-action="leave-export-usage"
                         >
+                          <i data-lucide="download" aria-hidden="true"></i>
+                          <span>내보내기</span>
+                        </button>
+                        <button
+                          class="btn btn-secondary leave-status-list-action"
+                          type="button"
+                        >
+                          <i data-lucide="settings" aria-hidden="true"></i>
+                          <span>컬럼 설정</span>
+                        </button>
                       </div>
                     </div>
-                    <div class="leave-usage-toolbar">
+                    <div class="leave-usage-toolbar hidden" aria-hidden="true">
                       <div class="leave-usage-period-controls">
                         <button
                           id="leaveUsageYearPrev"
@@ -2471,22 +2571,6 @@
                           <span id="leaveUsageEmployeeFilterLabel">직원</span>
                         </button>
                       </div>
-                      <label
-                        class="input-field leave-filter-field leave-filter-field-policy"
-                      >
-                        <span>휴가 정책</span>
-                        <select id="leaveUsagePolicyFilter">
-                          <option value="all">전체 정책</option>
-                        </select>
-                      </label>
-                      <label class="input-field leave-filter-field leave-inline-search">
-                        <span>검색</span>
-                        <input
-                          id="leaveUsageSearch"
-                          type="search"
-                          placeholder="직원명/현장 검색"
-                        />
-                      </label>
                     </div>
                     <div
                       class="leave-grid-header leave-usage-grid-header"
@@ -2498,7 +2582,7 @@
                         data-action="leave-usage-sort"
                         data-sort-key="employee"
                       >
-                        <span>직원</span
+                        <span>이름</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2510,7 +2594,7 @@
                         data-action="leave-usage-sort"
                         data-sort-key="site"
                       >
-                        <span>현장</span
+                        <span>근무지</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2520,9 +2604,9 @@
                         class="admin-sort-btn"
                         type="button"
                         data-action="leave-usage-sort"
-                        data-sort-key="granted"
+                        data-sort-key="code"
                       >
-                        <span>지급</span
+                        <span>사번</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2532,9 +2616,9 @@
                         class="admin-sort-btn"
                         type="button"
                         data-action="leave-usage-sort"
-                        data-sort-key="used"
+                        data-sort-key="type"
                       >
-                        <span>사용</span
+                        <span>휴가 유형</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2544,9 +2628,33 @@
                         class="admin-sort-btn"
                         type="button"
                         data-action="leave-usage-sort"
-                        data-sort-key="pending"
+                        data-sort-key="period"
                       >
-                        <span>승인 대기</span
+                        <span>사용 기간</span
+                        ><span
+                          class="admin-sort-indicator"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        class="admin-sort-btn"
+                        type="button"
+                        data-action="leave-usage-sort"
+                        data-sort-key="duration"
+                      >
+                        <span>사용일수</span
+                        ><span
+                          class="admin-sort-indicator"
+                          aria-hidden="true"
+                        ></span>
+                      </button>
+                      <button
+                        class="admin-sort-btn"
+                        type="button"
+                        data-action="leave-usage-sort"
+                        data-sort-key="status"
+                      >
+                        <span>상태</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2558,19 +2666,14 @@
                         data-action="leave-usage-sort"
                         data-sort-key="remaining"
                       >
-                        <span>잔여</span
+                        <span>잔여 연차</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
                         ></span>
                       </button>
-                      <button
-                        class="admin-sort-btn"
-                        type="button"
-                        data-action="leave-usage-sort"
-                        data-sort-key="latest"
-                      >
-                        <span>최근 사용</span
+                      <button class="admin-sort-btn" type="button">
+                        <span>관리</span
                         ><span
                           class="admin-sort-indicator"
                           aria-hidden="true"
@@ -2583,7 +2686,28 @@
                       aria-live="polite"
                       aria-busy="false"
                     ></ul>
+                    <div class="leave-status-table-footer">
+                      <span id="leaveUsageCount">전체 0건</span>
+                      <div
+                        id="leaveStatusPagination"
+                        class="leave-status-pagination"
+                        aria-label="휴가 현황 페이지"
+                      ></div>
+                      <button
+                        class="btn btn-secondary leave-status-page-size"
+                        type="button"
+                      >
+                        <span>10개씩 보기</span>
+                        <i data-lucide="chevron-down" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </article>
+                  <aside
+                    id="leaveStatusTypeSummaryCard"
+                    class="module-card leave-status-type-card"
+                    aria-label="이번 달 휴가 유형별 현황"
+                  ></aside>
+                  </div>
                 </section>
               </section>
 
@@ -2923,7 +3047,7 @@
                 <div class="requests-heading-block">
                   <h3>승인 절차</h3>
                   <p id="hrApprovalProcedureScopeHint" class="muted">
-                    문서 템플릿별 승인 단계를 관리합니다.
+                    증명서를 승인 단계별로 설정하고, 각 단계에 담당자를 지정하세요.
                   </p>
                 </div>
                 <div class="inline-actions">
@@ -2943,46 +3067,6 @@
                 >
                   <div class="hr-approval-procedure-workspace">
                     <section class="hr-approval-procedure-author-card">
-                      <div class="hr-approval-procedure-toolbar">
-                        <label
-                          class="input-field hr-approval-procedure-type-field"
-                        >
-                          템플릿 타입
-                          <select id="hrTemplateTypeSelect">
-                            <option value="employment_certificate">
-                              재직증명서
-                            </option>
-                            <option value="career_certificate">
-                              경력증명서
-                            </option>
-                            <option value="retirement_certificate">
-                              퇴직증명서
-                            </option>
-                            <option value="leave_of_absence_certificate">
-                              휴직증명서
-                            </option>
-                            <option value="resignation_form">사직서</option>
-                          </select>
-                        </label>
-                        <div
-                          class="inline-actions hr-approval-procedure-toolbar-actions"
-                        >
-                          <button
-                            type="button"
-                            class="btn btn-secondary"
-                            data-action="hr-approval-procedure-create"
-                          >
-                            승인절차 생성하기
-                          </button>
-                          <button
-                            type="button"
-                            class="btn btn-primary"
-                            data-action="hr-approval-rules-save"
-                          >
-                            저장
-                          </button>
-                        </div>
-                      </div>
                       <p id="hrApprovalRulesStatus" class="muted">
                         문서 타입별 승인선을 불러오는 중입니다.
                       </p>
@@ -3220,7 +3304,6 @@
                       <span id="supportStatusFooterTotal">전체 128건</span>
                       <nav class="support-status-pagination" aria-label="페이지">
                         <button type="button" aria-label="이전 페이지">‹</button>
-                        <button type="button" aria-label="처음 페이지">‹</button>
                         <button type="button" class="active">1</button>
                         <button type="button">2</button>
                         <button type="button">3</button>
@@ -3312,7 +3395,7 @@
           <section id="view-attendance" class="panel card view hidden">
             <div class="workspace-head attendance-workspace-head">
               <div class="workspace-head-main">
-                <h2>출퇴근</h2>
+                <h2>날짜별</h2>
                 <p
                   id="attendanceWorkspaceSubtitle"
                   class="muted attendance-workspace-subtitle hidden"
@@ -3405,7 +3488,7 @@
                         <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-date-day"></use>
                       </svg>
                     </span>
-                    <span>날짜별</span>
+                    <span>리스트형</span>
                   </button>
                   <button
                     class="btn btn-secondary workspace-tab"
@@ -3418,7 +3501,7 @@
                         <use href="assets/attendance-icons/arls-attendance-icon-pack/arls-attendance-sprite.svg#arls-period-list"></use>
                       </svg>
                     </span>
-                    <span>기간별</span>
+                    <span>캘린더형</span>
                   </button>
                   <button
                     class="btn btn-secondary workspace-tab"
@@ -4069,7 +4152,7 @@
               >
                 <div class="approval-head attendance-grid-head">
                   <div class="requests-heading-block">
-                    <h3 id="attendanceStatsPanelTitle">출퇴근 통계</h3>
+                    <h3 id="attendanceStatsPanelTitle">통계</h3>
                   </div>
                   <div
                     class="attendance-grid-head-actions attendance-stats-head-actions"
@@ -7863,7 +7946,7 @@
                         id="scheduleFinanceSubmitEntryReason"
                         class="muted"
                       >
-                        제출 상태를 불러오는 중입니다.
+                        지점을 선택해 Finance 제출 workflow를 시작하세요.
                       </p>
                     </div>
                     <label
@@ -8266,7 +8349,7 @@
                         </thead>
                         <tbody id="financeDownloadIntroRecentBody">
                           <tr>
-                            <td colspan="3">최근 업로드를 불러오는 중입니다.</td>
+                            <td colspan="3">표시할 최근 업로드가 없습니다.</td>
                           </tr>
                         </tbody>
                       </table>
@@ -8459,7 +8542,7 @@
                     <tbody id="financeDownloadTableBody">
                       <tr class="admin-table-empty-row">
                         <td colspan="10">
-                          지점별 업로드 현황을 불러오는 중입니다.
+                          표시할 다운로드 대상이 없습니다.
                         </td>
                       </tr>
                     </tbody>
@@ -8518,10 +8601,22 @@
           <section id="view-dev-console" class="panel card view hidden">
             <div class="workspace-head system-workspace-head">
               <div class="workspace-head-main">
-                <h2 id="masterConsoleHeader">회사 관리</h2>
+                <h2 id="masterConsoleHeader">회사</h2>
                 <p class="muted">
-                  회사를 조회하고 운영 상태와 기본 정보를 관리합니다.
+                  회사 정보를 조회하고 운영 상태를 관리합니다.
                 </p>
+              </div>
+              <div class="master-company-head-actions" aria-label="회사 관리 작업">
+                <button
+                  id="masterTenantCreateBtn"
+                  class="btn btn-primary master-company-head-btn"
+                  type="button"
+                  data-action="master-route"
+                  data-route="/master/tenants/new"
+                >
+                  <span aria-hidden="true">＋</span>
+                  회사 추가
+                </button>
               </div>
             </div>
             <div class="workspace-tabs organization-workspace-tabs">
@@ -8541,7 +8636,7 @@
                 data-route="/branch/sites"
                 data-organization-route="/branch/sites"
               >
-                지점
+                근무지
               </button>
               <button
                 class="btn btn-secondary workspace-tab"
@@ -8560,7 +8655,7 @@
                 data-action="master-route"
                 data-route="/master/tenants"
               >
-                회사 관리
+                회사
               </button>
               <button
                 class="btn btn-secondary workspace-tab master-route-tab"
@@ -8634,17 +8729,35 @@
                     class="master-company-toolbar-field master-company-toolbar-search"
                     for="masterTenantSearchInput"
                   >
-                    <span>검색</span>
-                    <input
-                      id="masterTenantSearchInput"
-                      placeholder="회사명 또는 코드 검색"
-                    />
+                    <span class="sr-only">검색</span>
+                    <span class="master-company-search-control">
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        focusable="false"
+                      >
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-3.5-3.5"></path>
+                      </svg>
+                      <input
+                        id="masterTenantSearchInput"
+                        placeholder="회사명 또는 코드 검색"
+                      />
+                    </span>
                   </label>
-                  <div class="master-company-toolbar-field">
-                    <span>상태</span>
+                  <div class="master-company-toolbar-field master-company-status-field">
+                    <span class="sr-only">상태</span>
                     <div class="master-status-tabs master-status-segment">
                       <button
                         class="btn btn-secondary master-status-tab active"
+                        type="button"
+                        data-action="master-tenant-status"
+                        data-status="all"
+                      >
+                        전체
+                      </button>
+                      <button
+                        class="btn btn-secondary master-status-tab"
                         type="button"
                         data-action="master-tenant-status"
                         data-status="active"
@@ -8659,33 +8772,15 @@
                       >
                         비활성
                       </button>
-                      <button
-                        class="btn btn-secondary master-status-tab"
-                        type="button"
-                        data-action="master-tenant-status"
-                        data-status="deleted"
-                      >
-                        삭제됨
-                      </button>
                     </div>
                   </div>
                   <div class="master-company-toolbar-actions">
                     <button
-                      id="masterTenantRefreshBtn"
-                      class="btn btn-secondary"
+                      class="btn btn-secondary master-company-filter-btn"
                       type="button"
-                      data-action="master-refresh-dashboard"
                     >
-                      새로고침
-                    </button>
-                    <button
-                      id="masterTenantCreateBtn"
-                      class="btn btn-primary"
-                      type="button"
-                      data-action="master-route"
-                      data-route="/master/tenants/new"
-                    >
-                      회사 추가
+                      <span aria-hidden="true">▽</span>
+                      필터
                     </button>
                   </div>
                 </div>
@@ -8768,13 +8863,53 @@
                               ></span>
                             </button>
                           </th>
-                          <th>정보 기입</th>
+                          <th class="sortable-col">
+                            <button
+                              class="admin-sort-btn"
+                              type="button"
+                              data-action="master-tenant-sort"
+                              data-sort-key="tenantCode"
+                            >
+                              <span>회사 ID</span>
+                              <span
+                                class="admin-sort-indicator"
+                                aria-hidden="true"
+                              ></span>
+                            </button>
+                          </th>
+                          <th>대표자</th>
                           <th>연결 현황</th>
+                          <th>최근 수정일</th>
                           <th>작업</th>
                         </tr>
                       </thead>
                       <tbody id="masterTenantTableBody"></tbody>
                     </table>
+                  </div>
+                  <div class="master-company-table-footer">
+                    <button class="master-company-page-size" type="button">
+                      페이지당&nbsp; 10개
+                      <span aria-hidden="true">⌄</span>
+                    </button>
+                    <nav
+                      class="master-company-pagination"
+                      aria-label="회사 목록 페이지"
+                    >
+                      <button type="button" aria-label="이전 페이지">‹</button>
+                      <button
+                        class="active"
+                        type="button"
+                        aria-current="page"
+                      >
+                        1
+                      </button>
+                      <button type="button" aria-label="다음 페이지">›</button>
+                    </nav>
+                    <span
+                      id="masterTenantPaginationRange"
+                      class="master-company-pagination-range"
+                      >0 - 0 of 0</span
+                    >
                   </div>
                   <ul id="masterTenantCardList" class="list"></ul>
                 </article>
@@ -8813,165 +8948,279 @@
               </div>
             </section>
 
-            <section id="masterSectionTenantCreate" class="stack hidden">
-              <article class="module-card stack">
-                <div class="wizard-card-head">
-                  <div>
-                    <h3>회사 등록</h3>
-                    <p class="muted">
-                      브랜드 정보, 기본 정보, 초기 관리자만 확인하고 저장합니다.
-                    </p>
-                  </div>
-                </div>
+            <section
+              id="masterSectionTenantCreate"
+              class="stack master-company-create-shell hidden"
+            >
+              <div class="master-company-create-top-actions">
+                <button
+                  class="btn btn-secondary master-company-create-cancel"
+                  type="button"
+                  data-action="master-route"
+                  data-route="/master/tenants"
+                >
+                  취소
+                </button>
+                <button
+                  class="btn btn-primary master-company-create-submit"
+                  type="submit"
+                  form="masterTenantCreateForm"
+                >
+                  회사 생성
+                </button>
+              </div>
+              <article class="master-company-create-surface">
                 <form
                   id="masterTenantCreateForm"
-                  class="stack registration-form"
+                  class="stack registration-form master-company-create-form"
                 >
-                  <div class="wizard-step-strip">
-                    <span class="wizard-step-chip active"
-                      >1. 조직 컨텍스트</span
-                    >
-                    <span class="wizard-step-chip">2. 기본 정보</span>
-                    <span class="wizard-step-chip">3. 운영/권한</span>
-                    <span class="wizard-step-chip">4. 검토/저장</span>
-                  </div>
-                  <div class="registration-workspace">
-                    <div class="registration-main stack">
-                      <section class="registration-step-section stack">
-                        <div class="wizard-form-divider">
-                          <strong>1. 조직 컨텍스트</strong>
-                          <span
-                            >회사 기본 식별값과 브랜드 정보를 먼저
-                            입력합니다.</span
-                          >
-                        </div>
-                        <div class="registration-grid">
+                  <div class="master-company-create-layout">
+                    <div class="master-company-create-main">
+                      <section class="master-company-create-card">
+                        <h3>기본 정보</h3>
+                        <div class="master-company-create-grid">
                           <label
                             class="input-field"
                             for="masterCreateTenantName"
                           >
-                            회사명
+                            <span class="master-company-create-label"
+                              >회사명 <b aria-hidden="true">*</b></span
+                            >
                             <input
                               id="masterCreateTenantName"
-                              placeholder="예: Demo Company"
+                              placeholder="센트릭스 주식회사"
                               required
                             />
-                            <span class="input-helper"
-                              >회사 ID(tenant_id)는 저장 시 시스템에서 자동
-                              생성됩니다.</span
-                            >
                           </label>
-                          <label
-                            class="input-field"
-                            for="masterCreateTenantLogo"
-                          >
-                            로고 주소 (선택)
+                          <label class="input-field">
+                            <span class="master-company-create-label"
+                              >회사 코드</span
+                            >
                             <input
-                              id="masterCreateTenantLogo"
-                              placeholder="https://..."
+                              value="자동 생성"
+                              disabled
+                              aria-label="회사 코드는 자동 생성됩니다."
                             />
                           </label>
-                        </div>
-                      </section>
-
-                      <section class="registration-step-section stack">
-                        <div class="wizard-form-divider">
-                          <strong>2. 기본 정보</strong>
-                          <span>대표자, 사업자 정보, 연락처를 입력합니다.</span>
-                        </div>
-                        <div class="registration-grid">
                           <label
                             class="input-field"
                             for="masterCreateTenantCeoName"
                           >
-                            대표자
+                            <span class="master-company-create-label"
+                              >대표자 <b aria-hidden="true">*</b></span
+                            >
                             <input
                               id="masterCreateTenantCeoName"
-                              placeholder="예: 홍길동"
-                            />
-                          </label>
-                          <label
-                            class="input-field"
-                            for="masterCreateTenantBizRegNo"
-                          >
-                            사업자 등록 번호
-                            <input
-                              id="masterCreateTenantBizRegNo"
-                              placeholder="예: 123-45-67890"
+                              placeholder="홍길동"
                             />
                           </label>
                           <label
                             class="input-field"
                             for="masterCreateTenantPhone"
                           >
-                            전화번호
+                            <span class="master-company-create-label"
+                              >대표 연락처 <b aria-hidden="true">*</b></span
+                            >
                             <input
                               id="masterCreateTenantPhone"
-                              placeholder="예: 02-1234-5678"
+                              placeholder="010-1234-5678"
                             />
                           </label>
                           <label
                             class="input-field"
                             for="masterCreateTenantEmail"
                           >
-                            회사 이메일
+                            <span class="master-company-create-label"
+                              >대표 이메일 <b aria-hidden="true">*</b></span
+                            >
                             <input
                               id="masterCreateTenantEmail"
                               type="email"
-                              placeholder="예: hr@company.co.kr"
-                            />
-                          </label>
-                          <label
-                            class="input-field registration-span-full"
-                            for="masterCreateTenantAddress"
-                          >
-                            주소
-                            <textarea
-                              id="masterCreateTenantAddress"
-                              rows="2"
-                              placeholder="회사 주소를 입력하세요"
-                            ></textarea>
-                          </label>
-                          <label
-                            class="input-field registration-span-full"
-                            for="masterCreateTenantSealFile"
-                          >
-                            도장 사진 첨부
-                            <input
-                              id="masterCreateTenantSealFile"
-                              type="file"
-                              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                            />
-                            <span class="input-helper">PNG/JPG, 최대 2MB</span>
-                          </label>
-                        </div>
-                      </section>
-
-                      <section class="registration-step-section stack">
-                        <div class="wizard-form-divider">
-                          <strong>3. 운영/권한</strong>
-                          <span
-                            >초기 관리자 계정과 기본 권한을 설정합니다.</span
-                          >
-                        </div>
-                        <div class="registration-grid">
-                          <label class="input-field" for="masterCreateAdminId">
-                            관리자 아이디
-                            <input
-                              id="masterCreateAdminId"
-                              placeholder="예: branch_admin"
-                              required
+                              placeholder="contact@sentrix.co.kr"
                             />
                           </label>
                           <label
                             class="input-field"
-                            for="masterCreateAdminRole"
+                            for="masterCreateTenantBizRegNo"
                           >
+                            <span class="master-company-create-label"
+                              >사업자등록번호 <b aria-hidden="true">*</b></span
+                            >
+                            <input
+                              id="masterCreateTenantBizRegNo"
+                              placeholder="123-45-67890"
+                            />
+                          </label>
+                          <label
+                            class="input-field master-company-create-span-full"
+                            for="masterCreateTenantAddress"
+                          >
+                            <span class="master-company-create-label"
+                              >주소 <b aria-hidden="true">*</b></span
+                            >
+                            <input
+                              id="masterCreateTenantAddress"
+                              placeholder="서울특별시 강남구 테헤란로 123, 센트릭스빌딩 10층"
+                            />
+                          </label>
+                        </div>
+                        <div class="master-company-create-assets">
+                          <div class="master-company-upload-card">
+                            <div class="master-company-upload-head">
+                              <strong>회사 로고</strong>
+                              <span
+                                id="masterCreateLogoStatus"
+                                class="master-company-create-pill is-muted"
+                                >등록 대기</span
+                              >
+                            </div>
+                            <label
+                              class="master-company-upload-body"
+                              for="masterCreateTenantLogoFile"
+                              data-master-company-upload="logo"
+                            >
+                              <span class="master-company-upload-file-icon">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <rect
+                                    x="4"
+                                    y="5"
+                                    width="16"
+                                    height="14"
+                                    rx="2"
+                                  ></rect>
+                                  <path d="m8 14 2.2-2.2 2.3 2.3 1.5-1.5L18 17"></path>
+                                  <circle cx="8.5" cy="9.5" r="1"></circle>
+                                </svg>
+                              </span>
+                              <span class="master-company-upload-copy">
+                                <strong id="masterCreateLogoFileName"
+                                  >로고 파일을 선택하거나 드래그하세요</strong
+                                >
+                                <small id="masterCreateLogoFileMeta"
+                                  >PNG, JPG · 최대 2MB</small
+                                >
+                              </span>
+                              <span
+                                id="masterCreateLogoPreview"
+                                class="master-company-upload-preview is-empty"
+                              >
+                                <span class="master-company-upload-empty-preview"
+                                  >미리보기</span
+                                >
+                              </span>
+                            </label>
+                            <input
+                              id="masterCreateTenantLogoFile"
+                              class="master-company-upload-hidden-input"
+                              type="file"
+                              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                            />
+                            <input
+                              id="masterCreateTenantLogo"
+                              class="master-company-upload-hidden-input"
+                              type="hidden"
+                              aria-label="로고 주소"
+                            />
+                            <div class="master-company-upload-actions">
+                              <button
+                                class="btn btn-secondary"
+                                type="button"
+                                data-action="master-open-logo-picker"
+                              >
+                                파일 선택
+                              </button>
+                              <button
+                                class="btn btn-secondary"
+                                type="button"
+                                data-action="master-clear-logo-input"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                          <div class="master-company-upload-card">
+                            <div class="master-company-upload-head">
+                              <strong>회사 도장 (전자 문서/계약용)</strong>
+                              <span
+                                id="masterCreateSealStatus"
+                                class="master-company-create-pill is-muted"
+                                >등록 대기</span
+                              >
+                            </div>
+                            <label
+                              class="master-company-upload-body"
+                              for="masterCreateTenantSealFile"
+                              data-master-company-upload="seal"
+                            >
+                              <span class="master-company-upload-file-icon">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <rect
+                                    x="4"
+                                    y="5"
+                                    width="16"
+                                    height="14"
+                                    rx="2"
+                                  ></rect>
+                                  <path d="m8 14 2.2-2.2 2.3 2.3 1.5-1.5L18 17"></path>
+                                  <circle cx="8.5" cy="9.5" r="1"></circle>
+                                </svg>
+                              </span>
+                              <span class="master-company-upload-copy">
+                                <strong id="masterCreateSealFileName"
+                                  >도장 파일을 선택하거나 드래그하세요</strong
+                                >
+                                <small id="masterCreateSealFileMeta"
+                                  >PNG, JPG · 최대 2MB</small
+                                >
+                              </span>
+                              <span
+                                id="masterCreateSealPreview"
+                                class="master-company-upload-preview is-empty"
+                              >
+                                <span class="master-company-upload-empty-preview"
+                                  >미리보기</span
+                                >
+                              </span>
+                            </label>
+                            <input
+                              id="masterCreateTenantSealFile"
+                              class="master-company-upload-hidden-input"
+                              type="file"
+                              accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                            />
+                            <div class="master-company-upload-actions">
+                              <button
+                                class="btn btn-secondary"
+                                type="button"
+                                data-action="master-open-seal-picker"
+                              >
+                                파일 선택
+                              </button>
+                              <button
+                                class="btn btn-secondary"
+                                type="button"
+                                data-action="master-clear-seal-input"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <p class="master-company-create-note">
+                          <span aria-hidden="true">ⓘ</span>
+                          회사 로고 및 도장은 문서/전자결재/계약 등에서
+                          사용됩니다.<br />
+                          권장 파일형식: PNG 또는 JPG 권장 (용량 2MB 이하)
+                        </p>
+                        <div class="master-company-create-hidden-admin">
+                          <label class="input-field" for="masterCreateAdminId">
+                            관리자 아이디
+                            <input id="masterCreateAdminId" required />
+                          </label>
+                          <label class="input-field" for="masterCreateAdminRole">
                             초기 권한
                             <select id="masterCreateAdminRole" required>
-                              <option value="hq_admin" selected>
-                                HQ Admin
-                              </option>
+                              <option value="hq_admin" selected>HQ Admin</option>
                               <option value="supervisor">Supervisor</option>
                               <option value="vice_supervisor">
                                 Vice Supervisor
@@ -8981,91 +9230,117 @@
                             </select>
                           </label>
                           <label
-                            class="input-field registration-span-full"
+                            class="input-field"
                             for="masterCreateAdminTempPassword"
                           >
                             임시 비밀번호
-                            <div class="master-temp-password-row">
-                              <input
-                                id="masterCreateAdminTempPassword"
-                                type="text"
-                                minlength="8"
-                                required
-                              />
-                              <button
-                                class="btn btn-secondary"
-                                type="button"
-                                data-action="master-generate-temp-password"
-                              >
-                                자동생성
-                              </button>
-                              <button
-                                class="btn btn-secondary"
-                                type="button"
-                                data-action="master-copy-temp-password"
-                              >
-                                복사
-                              </button>
-                            </div>
+                            <input
+                              id="masterCreateAdminTempPassword"
+                              type="text"
+                              minlength="8"
+                              required
+                            />
                           </label>
                         </div>
                       </section>
-
-                      <section class="registration-step-section stack">
-                        <div class="wizard-form-divider">
-                          <strong>4. 검토/저장</strong>
-                          <span
-                            >회사 정보와 초기 관리자 계정을 확인한 뒤
-                            저장합니다.</span
-                          >
-                        </div>
-                        <p class="muted">
-                          우측 요약 rail에서 생성 규칙과 전달 정보를 확인한 뒤
-                          저장하세요.
-                        </p>
-                      </section>
                     </div>
 
-                    <aside class="registration-rail stack">
-                      <article class="registration-rail-card stack">
-                        <h4>시스템 생성 요약</h4>
-                        <dl class="registration-summary-list">
+                    <aside class="master-company-create-rail">
+                      <article class="master-company-create-rail-card">
+                        <h3>등록 요약</h3>
+                        <dl class="master-company-create-summary">
                           <div>
-                            <dt>회사 ID</dt>
+                            <dt>필수 항목</dt>
+                            <dd>등록 상태</dd>
+                          </div>
+                          <div>
+                            <dt>회사 코드</dt>
                             <dd id="masterCreateTenantCodePreview">
-                              저장 시 자동 생성
+                              자동 생성
                             </dd>
                           </div>
                           <div>
-                            <dt>브랜드 입력</dt>
-                            <dd id="masterCreateBrandSummary">
-                              회사명과 로고 주소를 입력하세요.
-                            </dd>
-                          </div>
-                          <div>
-                            <dt>정책 안내</dt>
+                            <dt>상태</dt>
                             <dd>
-                              tenant_id, 초기 관리자 계정, 감사로그가 함께
-                              생성됩니다.
+                              <span class="master-company-create-pill is-success"
+                                >활성</span
+                              >
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>로고</dt>
+                            <dd>
+                              <span
+                                id="masterCreateBrandSummary"
+                                class="master-company-create-pill is-muted"
+                                >등록 대기</span
+                              >
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>회사 도장</dt>
+                            <dd>
+                              <span
+                                id="masterCreateSealSummary"
+                                class="master-company-create-pill is-muted"
+                                >등록 대기</span
+                              >
                             </dd>
                           </div>
                         </dl>
+                        <div class="master-company-create-progress-head">
+                          <strong>필수 입력</strong>
+                          <span id="masterCreateRequiredCount">0 / 7 입력</span>
+                        </div>
+                        <div class="master-company-create-progress">
+                          <span id="masterCreateProgressBar"></span>
+                        </div>
+                      </article>
+
+                      <article class="master-company-create-rail-card">
+                        <h3>생성 시 처리 항목</h3>
+                        <ul class="master-company-create-process-list">
+                          <li>
+                            <span aria-hidden="true">▣</span>
+                            회사 정보 저장
+                          </li>
+                          <li>
+                            <span aria-hidden="true">♙</span>
+                            회사 조직 체계 생성
+                          </li>
+                          <li>
+                            <span aria-hidden="true">▧</span>
+                            회사 로고 및 도장 저장
+                          </li>
+                          <li>
+                            <span aria-hidden="true">↻</span>
+                            회사 목록에 추가
+                          </li>
+                        </ul>
+                      </article>
+
+                      <article class="master-company-create-rail-card">
+                        <h3>입력 가이드</h3>
+                        <ul class="master-company-create-guide-list">
+                          <li>
+                            회사 정보는 정확하게 입력해야 각종 증명/신고 서류에
+                            일관되게 반영됩니다.
+                          </li>
+                          <li>회사 코드는 저장 시 자동으로 생성됩니다.</li>
+                          <li>
+                            로고 및 도장은 권장 규격을 준수해주세요.
+                          </li>
+                          <li>
+                            회사 도장 변경 시 기존 문서에는 변경사항이 반영되지
+                            않습니다.
+                          </li>
+                        </ul>
                       </article>
 
                       <article
                         id="masterCreateSummaryCard"
-                        class="registration-rail-card stack"
+                        class="master-company-create-rail-card master-company-create-debug-summary hidden"
                       >
-                        <div class="approval-head">
-                          <h4>초기 관리자 전달 정보</h4>
-                          <button
-                            class="btn btn-secondary"
-                            type="button"
-                            data-action="master-copy-create-summary"
-                          >
-                            복사
-                          </button>
-                        </div>
                         <pre
                           id="masterCreateSummaryText"
                           class="master-summary-pre"
@@ -9077,29 +9352,7 @@
 임시 비밀번호: -</pre
                         >
                       </article>
-
-                      <article
-                        class="registration-rail-card registration-action-rail stack"
-                      >
-                        <h4>저장</h4>
-                        <p id="masterTenantCreateStatus" class="muted">
-                          회사 정보와 초기 관리자 계정을 저장할 준비가 되면
-                          아래에서 실행합니다.
-                        </p>
-                        <div class="registration-action-buttons">
-                          <button class="btn btn-primary" type="submit">
-                            저장
-                          </button>
-                          <button
-                            class="btn btn-secondary"
-                            type="button"
-                            data-action="master-route"
-                            data-route="/master/tenants"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      </article>
+                      <p id="masterTenantCreateStatus" class="muted"></p>
                     </aside>
                   </div>
                 </form>
@@ -9626,10 +9879,28 @@
               class="workspace-head organization-workspace-head employee-workspace-head"
             >
               <div class="workspace-head-main">
-                <h2 id="employeesViewTitle">직원 관리</h2>
+                <h2 id="employeesViewTitle">직원</h2>
                 <p id="employeesScopeHint" class="muted">
                   직원 목록과 상세 패널을 같은 작업면에서 관리합니다.
                 </p>
+              </div>
+              <div class="workspace-head-actions employee-page-head-actions">
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  data-action="drawer-open-route"
+                  data-route="/branch/employees/import"
+                >
+                  대량 등록
+                </button>
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  data-action="drawer-open-route"
+                  data-route="/branch/employees/new"
+                >
+                  직원 추가
+                </button>
               </div>
             </div>
             <div class="workspace-tabs organization-workspace-tabs">
@@ -9649,7 +9920,7 @@
                 data-route="/branch/sites"
                 data-organization-route="/branch/sites"
               >
-                지점
+                근무지
               </button>
               <button
                 class="btn btn-secondary workspace-tab shell-dev-only hidden"
@@ -9707,7 +9978,7 @@
                 <input
                   id="employeeSearchInput"
                   type="search"
-                  placeholder="이름, 직원번호, 연락처, 현장 검색"
+                  placeholder="이름, 사번, 이메일, 연락처 검색"
                   autocomplete="off"
                 />
               </label>
@@ -9718,18 +9989,21 @@
               >
                 <span>회사</span>
                 <select id="employeeTenantFilter">
-                  <option value="">현재 작업회사</option>
+                  <option value="">전체 회사</option>
                 </select>
               </label>
 
               <label class="employee-toolbar-field">
                 <span>현장</span>
                 <select id="employeeSiteFilter">
-                  <option value="all">전체(활성)</option>
+                  <option value="all">전체 근무지</option>
                 </select>
               </label>
 
-              <label class="employee-toolbar-field">
+              <label
+                id="employeeRoleFilterField"
+                class="employee-toolbar-field"
+              >
                 <span>역할</span>
                 <select id="employeeRoleFilter">
                   <option value="all">전체 역할</option>
@@ -9739,7 +10013,7 @@
               <label class="employee-toolbar-field">
                 <span>재직 상태</span>
                 <select id="employeeEmploymentStatusFilter">
-                  <option value="all">전체 재직 상태</option>
+                  <option value="all">전체 상태</option>
                   <option value="active">재직중</option>
                   <option value="inactive">비활성</option>
                   <option value="retired">퇴직</option>
@@ -9788,12 +10062,37 @@
             </div>
 
             <article id="employeeFormCard" class="module-card stack">
-              <div class="wizard-card-head">
-                <div>
-                  <h3>직원 등록</h3>
-                </div>
+              <div class="employee-create-actionbar">
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  data-action="drawer-open-route"
+                  data-route="/branch/employees/import"
+                >
+                  대량 등록
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  type="button"
+                  data-action="drawer-open-route"
+                  data-route="/branch/employees"
+                >
+                  취소
+                </button>
+                <button
+                  id="employeeSubmitBtn"
+                  class="btn btn-primary"
+                  type="submit"
+                  form="employeeForm"
+                >
+                  직원 생성
+                </button>
               </div>
-              <form id="employeeForm" class="stack registration-form">
+              <form
+                id="employeeForm"
+                class="stack registration-form employee-create-form"
+                novalidate
+              >
                 <input id="empId" type="hidden" />
                 <div class="wizard-step-strip">
                   <span class="wizard-step-chip active">1. 조직 컨텍스트</span>
@@ -9801,19 +10100,22 @@
                   <span class="wizard-step-chip">3. 운영/권한</span>
                   <span class="wizard-step-chip">4. 검토/저장</span>
                 </div>
-                <div class="registration-workspace">
+                <div class="registration-workspace employee-create-workspace">
                   <div class="registration-main stack">
-                    <section class="registration-step-section stack">
+                    <section
+                      class="registration-step-section stack employee-create-basic-card"
+                    >
                       <div class="wizard-form-divider">
-                        <strong>1. 조직 컨텍스트</strong>
-                        <span>회사와 현장 기준을 먼저 고정합니다.</span>
+                        <strong>기본 정보</strong>
                       </div>
-                      <div class="registration-grid">
+                      <div class="registration-grid employee-create-basic-grid">
                         <label
                           id="empTenantSelectGroup"
-                          class="input-field hidden"
+                          class="input-field employee-create-company-select hidden"
                         >
-                          회사 선택 (필수)
+                          <span class="employee-create-field-label"
+                            >회사 선택 <em>*</em></span
+                          >
                           <select id="empTenantSelect">
                             <option value="">회사 선택</option>
                           </select>
@@ -9822,306 +10124,364 @@
                           >
                         </label>
 
-                        <label class="input-field">
-                          회사명
+                        <label class="input-field employee-create-company-field">
+                          <span class="employee-create-field-label"
+                            >회사 선택 <em>*</em></span
+                          >
                           <input
                             id="empCompanyCode"
-                            placeholder="현재 회사 자동 표시"
+                            placeholder="센트릭스 주식회사"
                             readonly
                           />
                         </label>
 
-                        <label class="input-field">
-                          근무 현장 선택
+                        <label class="input-field employee-create-site-field">
+                          <span class="employee-create-field-label"
+                            >근무현장 <em>*</em></span
+                          >
                           <select id="empSiteSelect" required>
-                            <option value="">현장 선택</option>
+                            <option value="">선택하세요</option>
                           </select>
                         </label>
 
-                        <label class="input-field">
-                          직원번호 (자동)
-                          <input
-                            id="empCodeDisplay"
-                            placeholder="저장 시 자동 생성"
-                            readonly
-                          />
-                        </label>
-                      </div>
-                    </section>
-
-                    <section class="registration-step-section stack">
-                      <div class="wizard-form-divider">
-                        <strong>2. 기본 정보</strong>
-                        <span
-                          >직원 기본 정보와 근로 기준 데이터를 입력합니다.</span
+                        <label
+                          class="input-field employee-create-management-field"
                         >
-                      </div>
-                      <div class="registration-grid">
-                        <label class="input-field">
-                          직원 이름
-                          <input
-                            id="empName"
-                            placeholder="예: 홍길동"
-                            required
-                          />
-                        </label>
-
-                        <label class="input-field">
-                          성별
-                          <select id="empGender">
-                            <option value="">선택 안 함</option>
-                            <option value="M">남자</option>
-                            <option value="F">여자</option>
-                          </select>
-                        </label>
-
-                        <label class="input-field">
-                          연락처
-                          <input
-                            id="empPhone"
-                            placeholder="예: 010-1234-5678"
-                            required
-                          />
-                        </label>
-
-                        <label class="input-field">
-                          이메일
-                          <input
-                            id="empEmail"
-                            type="email"
-                            placeholder="예: guard@example.com"
-                            required
-                          />
-                        </label>
-
-                        <label class="input-field">
-                          관리번호
+                          <span class="employee-create-field-label"
+                            >관리번호 <em>*</em></span
+                          >
                           <input
                             id="empManagementNo"
-                            placeholder="예: 0008 (선행 0 유지)"
+                            placeholder="SNTX-EMP-0134"
                             required
                           />
                         </label>
 
-                        <label class="input-field">
-                          생년월일
+                        <label class="input-field employee-create-name-field">
+                          <span class="employee-create-field-label"
+                            >직원 이름 <em>*</em></span
+                          >
+                          <input
+                            id="empName"
+                            placeholder="강서연"
+                            required
+                          />
+                        </label>
+
+                        <label class="input-field employee-create-birth-field">
+                          <span class="employee-create-field-label"
+                            >생년월일 <em>*</em></span
+                          >
                           <input id="empBirthDate" type="date" required />
                         </label>
 
-                        <label class="input-field">
-                          주민번호
-                          <input
-                            id="empResidentNo"
-                            placeholder="예: 900101-1234567"
-                            inputmode="numeric"
-                          />
-                        </label>
-
-                        <label class="input-field registration-span-full">
-                          주소
-                          <input
-                            id="empAddress"
-                            placeholder="예: 서울 강남구 ..."
-                            required
-                          />
-                        </label>
-
-                        <label class="input-field">
-                          경비원 신임교육 이수증 교부번호
-                          <input
-                            id="empTrainingCertNo"
-                            placeholder="교부번호 입력"
-                            required
-                          />
-                        </label>
-
-                        <label class="input-field">
-                          채용일
+                        <label class="input-field employee-create-hire-field">
+                          <span class="employee-create-field-label"
+                            >채용일 <em>*</em></span
+                          >
                           <input id="empHireDate" type="date" required />
                         </label>
 
-                        <label class="input-field">
-                          퇴직일 (선택)
-                          <input id="empLeaveDate" type="date" />
-                        </label>
-
-                        <label class="input-field">
-                          재직 상태
-                          <select id="empEmploymentStatus">
-                            <option value="active">재직</option>
-                            <option value="leave_of_absence">휴직</option>
-                            <option value="terminated">퇴직</option>
-                            <option value="inactive">비활성</option>
-                          </select>
-                        </label>
-
-                        <label class="input-field">
-                          휴직 시작일 (선택)
-                          <input id="empLoaStartDate" type="date" />
-                        </label>
-
-                        <label class="input-field">
-                          휴직 종료일 / 복귀예정일 (선택)
-                          <input id="empLoaEndDate" type="date" />
-                        </label>
-                      </div>
-                    </section>
-
-                    <section class="registration-step-section stack">
-                      <div class="wizard-form-divider">
-                        <strong>3. 운영/권한</strong>
-                        <span>SOC 계정과 역할, 운영 권한을 확인합니다.</span>
-                      </div>
-                      <div class="registration-grid">
-                        <label class="input-field">
-                          ID (연락처 자동)
+                        <label class="input-field employee-create-phone-field">
+                          <span class="employee-create-field-label"
+                            >연락처 <em>*</em></span
+                          >
                           <input
-                            id="empSocLoginId"
-                            placeholder="연락처 입력 시 자동 생성"
-                            readonly
+                            id="empPhone"
+                            placeholder="010-1234-5678"
+                            required
                           />
                         </label>
 
-                        <label class="input-field">
-                          초기 비밀번호 (연락처 자동)
+                        <label class="input-field employee-create-email-field">
+                          <span class="employee-create-field-label"
+                            >이메일</span
+                          >
                           <input
-                            id="empSocTempPassword"
-                            type="text"
-                            placeholder="연락처 입력 시 자동 생성"
-                            readonly
+                            id="empEmail"
+                            type="email"
+                            placeholder="seoyeon.kim@sentrix.co.kr"
                           />
                         </label>
 
-                        <label class="input-field">
-                          SOC 적용 권한/역할 (필수)
+                        <label
+                          class="input-field employee-create-address-field registration-span-full"
+                        >
+                          <span class="employee-create-field-label"
+                            >주소 <em>*</em></span
+                          >
+                          <input
+                            id="empAddress"
+                            placeholder="서울특별시 강남구 테헤란로 123, 센트릭스빌딩 10층"
+                            required
+                          />
+                        </label>
+
+                        <label
+                          class="input-field employee-create-training-field"
+                        >
+                          <span class="employee-create-field-label"
+                            >경비이수증 교부번호 <em>*</em></span
+                          >
+                          <input
+                            id="empTrainingCertNo"
+                            placeholder="SEC-2024-10482"
+                            required
+                          />
+                        </label>
+
+                        <label class="input-field employee-create-role-field">
+                          <span class="employee-create-field-label"
+                            >권한 <em>*</em></span
+                          >
                           <select id="empSocRole" required>
-                            <option value="">권한 선택</option>
+                            <option value="">권한을 선택하세요</option>
                             <option value="Officer">Officer</option>
                             <option value="Vice_Supervisor">
-                              Vice_Supervisor
+                              Vice Supervisor
                             </option>
                             <option value="Supervisor">Supervisor</option>
-                            <option value="HQ_Admin">HQ_Admin</option>
+                            <option value="HQ_Admin">HQ Admin</option>
                             <option value="Developer">Developer</option>
                           </select>
                         </label>
                       </div>
                     </section>
 
-                    <section class="registration-step-section stack">
+                    <section
+                      class="registration-step-section stack employee-create-account-card"
+                    >
                       <div class="wizard-form-divider">
-                        <strong>4. 검토/저장</strong>
-                        <span
-                          >첨부 자료와 검토 항목을 확인한 뒤 저장합니다.</span
-                        >
+                        <strong>계정 정보</strong>
                       </div>
-                      <div class="registration-grid">
-                        <label class="input-field">
-                          경비원명부 첨부 (선택)
+                      <div class="registration-grid employee-create-account-grid">
+                        <label class="input-field employee-create-login-field">
+                          <span class="employee-create-field-label"
+                            >로그인 ID <em>*</em></span
+                          >
                           <input
-                            id="empRosterDocx"
-                            type="file"
-                            accept=".docx"
+                            id="empSocLoginId"
+                            placeholder="연락처 입력 시 자동 생성"
+                            readonly
                           />
+                          <span class="input-helper"
+                            >최초 로그인 시 비밀번호 변경이 가능합니다.</span
+                          >
                         </label>
 
-                        <label class="input-field">
-                          사진 첨부 (선택)
-                          <input id="empPhoto" type="file" accept="image/*" />
+                        <label
+                          class="input-field employee-create-password-field"
+                        >
+                          <span class="employee-create-field-label"
+                            >비밀번호 <em>*</em></span
+                          >
+                          <span class="employee-create-password-wrap">
+                            <input
+                              id="empSocTempPassword"
+                              type="password"
+                              placeholder="연락처 입력 시 자동 생성"
+                              readonly
+                            />
+                            <button
+                              class="employee-create-password-toggle"
+                              type="button"
+                              data-action="employee-toggle-temp-password"
+                              aria-label="비밀번호 표시 전환"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path
+                                  d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"
+                                ></path>
+                                <circle cx="12" cy="12" r="2.8"></circle>
+                              </svg>
+                            </button>
+                          </span>
                         </label>
                       </div>
                     </section>
+
+                    <section
+                      class="registration-step-section stack employee-create-photo-card"
+                    >
+                      <div class="wizard-form-divider">
+                        <strong>프로필 사진 <span>(선택)</span></strong>
+                      </div>
+                      <div class="employee-create-photo-row">
+                        <div class="employee-create-photo-avatar">
+                          <img
+                            id="empPhotoPreview"
+                            class="employee-photo-preview hidden"
+                            alt="직원 사진 썸네일"
+                          />
+                        </div>
+                        <div class="employee-create-photo-copy">
+                          <strong>프로필 사진을 업로드하세요.</strong>
+                          <p class="muted">
+                            권장 크기: 240x240px, JPG, PNG (최대 2MB)
+                          </p>
+                          <label class="btn btn-secondary employee-photo-file-btn">
+                            파일 선택
+                            <input
+                              id="empPhoto"
+                              type="file"
+                              accept="image/*"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </section>
+
+                    <div class="employee-create-hidden-fields" aria-hidden="true">
+                      <input
+                        id="empCodeDisplay"
+                        placeholder="저장 시 자동 생성"
+                        readonly
+                      />
+                      <select id="empGender" tabindex="-1">
+                        <option value="">선택 안 함</option>
+                        <option value="M">남자</option>
+                        <option value="F">여자</option>
+                      </select>
+                      <input
+                        id="empResidentNo"
+                        placeholder="예: 900101-1234567"
+                        inputmode="numeric"
+                        tabindex="-1"
+                      />
+                      <input id="empLeaveDate" type="date" tabindex="-1" />
+                      <select id="empEmploymentStatus" tabindex="-1">
+                        <option value="active">재직</option>
+                        <option value="leave_of_absence">휴직</option>
+                        <option value="terminated">퇴직</option>
+                        <option value="inactive">비활성</option>
+                      </select>
+                      <input id="empLoaStartDate" type="date" tabindex="-1" />
+                      <input id="empLoaEndDate" type="date" tabindex="-1" />
+                      <input
+                        id="empRosterDocx"
+                        type="file"
+                        accept=".docx"
+                        tabindex="-1"
+                      />
+                    </div>
                   </div>
 
                   <aside class="registration-rail stack">
                     <article class="registration-rail-card stack">
-                      <h4>선택 요약</h4>
+                      <h4>등록 요약</h4>
+                      <div class="employee-create-progress-head">
+                        <span id="employeeRequiredProgressText"
+                          >필수 입력 0 / 11 완료</span
+                        >
+                        <strong id="employeeRequiredProgressPercent">0%</strong>
+                      </div>
+                      <div class="employee-create-progress-track">
+                        <span id="employeeRequiredProgressBar"></span>
+                      </div>
                       <dl class="registration-summary-list">
                         <div>
                           <dt>회사</dt>
                           <dd id="employeeSummaryTenant">-</dd>
                         </div>
                         <div>
-                          <dt>근무 현장</dt>
+                          <dt>근무현장</dt>
                           <dd id="employeeSummarySite">-</dd>
                         </div>
                         <div>
-                          <dt>직원번호 preview</dt>
-                          <dd id="employeeSummaryCode">자동 생성 예정</dd>
+                          <dt>직원이름</dt>
+                          <dd id="employeeSummaryName">-</dd>
+                        </div>
+                        <div>
+                          <dt>관리번호</dt>
+                          <dd id="employeeSummaryCode">-</dd>
+                        </div>
+                        <div>
+                          <dt>권한</dt>
+                          <dd id="employeeSummaryRole">-</dd>
+                        </div>
+                        <div>
+                          <dt>연락처</dt>
+                          <dd id="employeeSummaryPhone">-</dd>
+                        </div>
+                        <div>
+                          <dt>이메일</dt>
+                          <dd id="employeeSummaryEmail">-</dd>
+                        </div>
+                        <div>
+                          <dt>로그인 ID</dt>
+                          <dd id="employeeSummaryLogin">-</dd>
                         </div>
                       </dl>
                     </article>
 
                     <article class="registration-rail-card stack">
-                      <h4>입력 점검</h4>
-                      <p id="employeeFormValidationHint" class="muted">
-                        필수 항목을 입력하면 저장할 수 있습니다.
-                      </p>
+                      <h4>생성 시 처리 항목</h4>
+                      <ul class="employee-create-process-list">
+                        <li>직원 정보 저장</li>
+                        <li>권한 적용</li>
+                        <li>계정 생성</li>
+                        <li>직원 목록에 추가</li>
+                      </ul>
                       <ul
                         id="employeeFormMissingList"
                         class="registration-check-list"
                       ></ul>
                     </article>
 
-                    <article
-                      class="registration-rail-card registration-action-rail stack"
-                    >
-                      <h4>검토 / 저장</h4>
-                      <div class="registration-action-buttons">
-                        <button
-                          id="employeeSubmitBtn"
-                          class="btn btn-primary"
-                          type="submit"
-                        >
-                          직원 등록
-                        </button>
-                        <button
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="employee-form-reset"
-                        >
-                          초기화
-                        </button>
-                        <button
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="drawer-open-route"
-                          data-route="/branch/employees"
-                        >
-                          취소
-                        </button>
-                      </div>
-                      <div class="registration-download-buttons">
-                        <button
-                          id="empDownloadRosterBtn"
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="employee-download-roster-file"
-                          disabled
-                        >
-                          경비원명부 다운로드
-                        </button>
-                        <button
-                          id="empDownloadPhotoBtn"
-                          class="btn btn-secondary"
-                          type="button"
-                          data-action="employee-download-photo-file"
-                          disabled
-                        >
-                          사진 다운로드
-                        </button>
-                      </div>
-                      <img
-                        id="empPhotoPreview"
-                        class="employee-photo-preview hidden"
-                        alt="직원 사진 썸네일"
-                      />
+                    <article class="registration-rail-card stack">
+                      <h4>입력 가이드</h4>
+                      <ul class="employee-create-guide-list">
+                        <li>모든 필수 항목(*)을 정확하게 입력해주세요.</li>
+                        <li>로그인 ID는 중복되지 않도록 입력해야 합니다.</li>
+                        <li>
+                          비밀번호는 영문, 숫자, 특수문자 포함 8자 이상
+                          입력합니다.
+                        </li>
+                        <li>
+                          프로필 사진은 선택 사항이며 추후 변경 가능합니다.
+                        </li>
+                      </ul>
                     </article>
                   </aside>
                 </div>
 
                 <input id="empRosterAttachmentId" type="hidden" />
                 <input id="empPhotoAttachmentId" type="hidden" />
+                <p id="employeeFormValidationHint" class="muted hidden">
+                  필수 항목을 입력하면 저장할 수 있습니다.
+                </p>
+                <button
+                  class="hidden"
+                  type="button"
+                  data-action="employee-form-reset"
+                  aria-hidden="true"
+                >
+                  초기화
+                </button>
+                <button
+                  id="empDownloadRosterBtn"
+                  class="hidden"
+                  type="button"
+                  data-action="employee-download-roster-file"
+                  disabled
+                  aria-hidden="true"
+                >
+                  경비원명부 다운로드
+                </button>
+                <button
+                  id="empDownloadPhotoBtn"
+                  class="hidden"
+                  type="button"
+                  data-action="employee-download-photo-file"
+                  disabled
+                  aria-hidden="true"
+                >
+                  사진 다운로드
+                </button>
               </form>
             </article>
 
@@ -10267,10 +10627,6 @@
               <div class="employee-directory-table-head">
                 <div class="employee-directory-table-head-main">
                   <h3>직원 목록</h3>
-                  <p class="muted">
-                    표에서 바로 비교하고, 선택한 직원은 상세 패널에서
-                    검토합니다.
-                  </p>
                 </div>
               </div>
               <div class="employee-table-wrap">
@@ -10282,9 +10638,9 @@
                           class="employee-sort-btn"
                           type="button"
                           data-action="employee-sort"
-                          data-sort-key="companyName"
+                          data-sort-key="fullName"
                         >
-                          <span>회사</span>
+                          <span>이름</span>
                           <span
                             class="employee-sort-indicator"
                             aria-hidden="true"
@@ -10298,21 +10654,7 @@
                           data-action="employee-sort"
                           data-sort-key="siteName"
                         >
-                          <span>현장</span>
-                          <span
-                            class="employee-sort-indicator"
-                            aria-hidden="true"
-                          ></span>
-                        </button>
-                      </th>
-                      <th class="sortable-col" scope="col">
-                        <button
-                          class="employee-sort-btn"
-                          type="button"
-                          data-action="employee-sort"
-                          data-sort-key="fullName"
-                        >
-                          <span>직원</span>
+                          <span>근무지</span>
                           <span
                             class="employee-sort-indicator"
                             aria-hidden="true"
@@ -10326,7 +10668,7 @@
                           data-action="employee-sort"
                           data-sort-key="employeeCode"
                         >
-                          <span>직원번호</span>
+                          <span>사번</span>
                           <span
                             class="employee-sort-indicator"
                             aria-hidden="true"
@@ -10338,9 +10680,23 @@
                           class="employee-sort-btn"
                           type="button"
                           data-action="employee-sort"
-                          data-sort-key="roleLabel"
+                          data-sort-key="jobTitle"
                         >
-                          <span>역할</span>
+                          <span>직책</span>
+                          <span
+                            class="employee-sort-indicator"
+                            aria-hidden="true"
+                          ></span>
+                        </button>
+                      </th>
+                      <th class="sortable-col" scope="col">
+                        <button
+                          class="employee-sort-btn"
+                          type="button"
+                          data-action="employee-sort"
+                          data-sort-key="phone"
+                        >
+                          <span>연락처</span>
                           <span
                             class="employee-sort-indicator"
                             aria-hidden="true"
@@ -10354,18 +10710,58 @@
                           data-action="employee-sort"
                           data-sort-key="employmentStatus"
                         >
-                          <span>재직상태</span>
+                          <span>상태</span>
                           <span
                             class="employee-sort-indicator"
                             aria-hidden="true"
                           ></span>
                         </button>
                       </th>
-                      <th scope="col">액션</th>
+                      <th class="sortable-col" scope="col">
+                        <button
+                          class="employee-sort-btn"
+                          type="button"
+                          data-action="employee-sort"
+                          data-sort-key="updatedAt"
+                        >
+                          <span>최근 수정일</span>
+                          <span
+                            class="employee-sort-indicator"
+                            aria-hidden="true"
+                          ></span>
+                        </button>
+                      </th>
+                      <th class="sortable-col" scope="col">
+                        <button
+                          class="employee-sort-btn"
+                          type="button"
+                          data-action="employee-sort"
+                          data-sort-key="roleLabel"
+                        >
+                          <span>권한</span>
+                          <span
+                            class="employee-sort-indicator"
+                            aria-hidden="true"
+                          ></span>
+                        </button>
+                      </th>
+                      <th scope="col">관리</th>
                     </tr>
                   </thead>
                   <tbody id="employeeDesktopTableBody"></tbody>
                 </table>
+              </div>
+              <div class="employee-directory-footer">
+                <p id="employeeDirectoryCount" class="muted">전체 0건</p>
+                <div class="employee-directory-pagination" aria-hidden="true"></div>
+                <button
+                  class="btn btn-secondary employee-directory-page-size"
+                  type="button"
+                  aria-label="페이지당 행 수"
+                  data-action="employee-page-size-cycle"
+                >
+                  10개씩 보기
+                </button>
               </div>
             </article>
 
@@ -10614,11 +11010,20 @@
           <section id="view-org" class="panel card view hidden">
             <div class="workspace-head organization-workspace-head">
               <div class="workspace-head-main">
-                <h2 id="orgViewTitle">지점 관리</h2>
+                <h2 id="orgViewTitle">근무지</h2>
                 <p id="orgScopeHint" class="muted">
-                  지점 목록을 확인하고, 선택한 지점은 오른쪽 상세 패널에서 바로
-                  수정 흐름으로 이어집니다.
+                  회사에 등록된 근무지(지점)를 관리합니다.
                 </p>
+              </div>
+              <div class="workspace-head-actions site-page-head-actions">
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  id="siteCreateBtn"
+                  data-action="site-open-create"
+                >
+                  근무지 추가
+                </button>
               </div>
             </div>
             <div class="workspace-tabs organization-workspace-tabs">
@@ -10638,7 +11043,7 @@
                 data-route="/branch/sites"
                 data-organization-route="/branch/sites"
               >
-                지점
+                근무지
               </button>
               <button
                 class="btn btn-secondary workspace-tab shell-dev-only hidden"
@@ -10671,21 +11076,21 @@
                   <input
                     id="siteSearchInput"
                     type="search"
-                    placeholder="지점명, 현장번호, 주소, 회사명 검색"
+                    placeholder="근무지명 또는 주소 검색"
                     autocomplete="off"
                   />
                 </label>
                 <label class="site-toolbar-field">
                   <span>회사</span>
                   <select id="siteTenantFilter">
-                    <option value="">현재 작업회사</option>
+                    <option value="">전체 회사</option>
                   </select>
                 </label>
                 <label class="site-toolbar-field">
                   <span>상태</span>
                   <select id="siteActiveFilter">
-                    <option value="all">전체(활성)</option>
-                    <option value="active">활성</option>
+                    <option value="all">전체 상태</option>
+                    <option value="active">운영중</option>
                     <option value="inactive">비활성</option>
                   </select>
                 </label>
@@ -10705,23 +11110,6 @@
                     삭제 포함
                   </label>
                 </div>
-                <div class="site-toolbar-actions">
-                  <button
-                    class="btn btn-secondary"
-                    type="button"
-                    data-action="site-search"
-                  >
-                    새로고침
-                  </button>
-                  <button
-                    class="btn btn-primary"
-                    type="button"
-                    id="siteCreateBtn"
-                    data-action="site-open-create"
-                  >
-                    지점 등록
-                  </button>
-                </div>
               </div>
               <div id="siteDirectoryWorkspace" class="site-directory-workspace">
                 <div class="site-directory-main">
@@ -10731,7 +11119,7 @@
                   >
                     <div class="site-directory-table-head">
                       <div class="site-directory-table-head-main">
-                        <h3 id="siteSectionTitle">지점 목록</h3>
+                        <h3 id="siteSectionTitle">근무지 목록</h3>
                         <p id="siteDirectoryCount" class="muted">전체 0곳</p>
                       </div>
                       <p id="siteTableHint" class="muted">
@@ -10748,20 +11136,6 @@
                                 class="admin-sort-btn"
                                 type="button"
                                 data-action="site-sort"
-                                data-sort-key="siteName"
-                              >
-                                <span>지점명 / 코드</span>
-                                <span
-                                  class="admin-sort-indicator"
-                                  aria-hidden="true"
-                                ></span>
-                              </button>
-                            </th>
-                            <th class="sortable-col">
-                              <button
-                                class="admin-sort-btn"
-                                type="button"
-                                data-action="site-sort"
                                 data-sort-key="companyName"
                               >
                                 <span>회사</span>
@@ -10771,15 +11145,30 @@
                                 ></span>
                               </button>
                             </th>
+                            <th class="sortable-col">
+                              <button
+                                class="admin-sort-btn"
+                                type="button"
+                                data-action="site-sort"
+                                data-sort-key="siteName"
+                              >
+                                <span>지점명</span>
+                                <span
+                                  class="admin-sort-indicator"
+                                  aria-hidden="true"
+                                ></span>
+                              </button>
+                            </th>
+                            <th>지점코드</th>
                             <th>주소</th>
                             <th class="sortable-col">
                               <button
                                 class="admin-sort-btn"
                                 type="button"
                                 data-action="site-sort"
-                                data-sort-key="radius"
+                                data-sort-key="employeeCount"
                               >
-                                <span>출퇴근 기준</span>
+                                <span>근무 인원</span>
                                 <span
                                   class="admin-sort-indicator"
                                   aria-hidden="true"
@@ -10800,11 +11189,81 @@
                                 ></span>
                               </button>
                             </th>
-                            <th>작업</th>
+                            <th class="sortable-col">
+                              <button
+                                class="admin-sort-btn"
+                                type="button"
+                                data-action="site-sort"
+                                data-sort-key="updatedAt"
+                              >
+                                <span>최근 수정일</span>
+                                <span
+                                  class="admin-sort-indicator"
+                                  aria-hidden="true"
+                                ></span>
+                              </button>
+                            </th>
+                            <th>관리</th>
                           </tr>
                         </thead>
                         <tbody id="siteDesktopTableBody"></tbody>
                       </table>
+                    </div>
+                    <div id="siteDirectoryFooter" class="site-directory-footer">
+                      <span id="siteDirectoryFooterCount">전체 0개</span>
+                      <nav
+                        class="site-directory-pagination"
+                        aria-label="근무지 목록 페이지"
+                      >
+                        <button
+                          class="site-directory-page-btn"
+                          type="button"
+                          data-action="site-page-prev"
+                          aria-label="이전 페이지"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          class="site-directory-page-btn active"
+                          type="button"
+                          data-action="site-page"
+                          data-page="1"
+                        >
+                          1
+                        </button>
+                        <button
+                          class="site-directory-page-btn"
+                          type="button"
+                          data-action="site-page"
+                          data-page="2"
+                        >
+                          2
+                        </button>
+                        <button
+                          class="site-directory-page-btn"
+                          type="button"
+                          data-action="site-page"
+                          data-page="3"
+                        >
+                          3
+                        </button>
+                        <button
+                          class="site-directory-page-btn"
+                          type="button"
+                          data-action="site-page-next"
+                          aria-label="다음 페이지"
+                        >
+                          ›
+                        </button>
+                      </nav>
+                      <button
+                        id="siteDirectoryPageSize"
+                        class="btn btn-secondary site-directory-page-size"
+                        type="button"
+                        data-action="site-page-size"
+                      >
+                        10개씩 보기
+                      </button>
                     </div>
                     <ul id="siteList" class="list"></ul>
                   </article>
@@ -10874,19 +11333,29 @@
               </div>
 
               <article id="siteEditorCard" class="module-card stack hidden">
-                <div class="site-editor-head">
+                <div class="site-editor-head worksite-create-actionbar">
                   <div class="wizard-card-head">
                     <div>
-                      <h3 id="siteEditorTitle">지점 등록</h3>
+                      <h3 id="siteEditorTitle">근무지 추가</h3>
                     </div>
                   </div>
-                  <button
-                    class="btn btn-secondary"
-                    type="button"
-                    data-action="site-editor-close"
-                  >
-                    목록으로
-                  </button>
+                  <div class="worksite-create-actions">
+                    <button
+                      class="btn btn-secondary"
+                      type="button"
+                      data-action="site-editor-close"
+                    >
+                      취소
+                    </button>
+                    <button
+                      class="btn btn-primary"
+                      id="siteSubmitBtn"
+                      type="button"
+                      data-action="submit-site"
+                    >
+                      근무지 생성
+                    </button>
+                  </div>
                 </div>
 
                 <form id="siteForm" class="stack registration-form" novalidate>
@@ -10898,50 +11367,61 @@
                     type="checkbox"
                     checked
                   />
-                  <div class="wizard-step-strip">
+                  <div class="wizard-step-strip worksite-create-hidden-strip">
                     <span class="wizard-step-chip active"
                       >1. 조직 컨텍스트</span
                     >
                     <span class="wizard-step-chip">2. 기본 정보</span>
                     <span class="wizard-step-chip">3. 검토/저장</span>
                   </div>
-                  <div class="registration-workspace">
+                  <div class="registration-workspace worksite-create-workspace">
                     <div class="registration-main stack">
-                      <section class="registration-step-section stack">
+                      <section
+                        class="registration-step-section stack worksite-basic-card"
+                      >
                         <div class="wizard-form-divider">
-                          <strong>1. 조직 컨텍스트</strong>
-                          <span
-                            >회사, 현장 번호, 현장명을 먼저 고정합니다.</span
-                          >
+                          <strong>기본 정보</strong>
                         </div>
-                        <div class="registration-grid">
+                        <div class="registration-grid worksite-basic-grid">
                           <div
                             id="siteCompanyContextGroup"
-                            class="registration-span-full registration-grid-substack"
+                            class="worksite-form-row worksite-company-field"
                           >
-                            <label class="input-field">
-                              회사명
-                              <select id="siteTenantSelect">
-                                <option value="">회사를 선택하세요</option>
-                              </select>
+                            <label
+                              class="worksite-field-label"
+                              for="siteTenantSelect"
+                              >회사 <span class="required-star">*</span>
                             </label>
+                            <select id="siteTenantSelect">
+                              <option value="">회사를 선택하세요</option>
+                            </select>
                           </div>
 
-                          <label class="input-field">
-                            현장 번호
-                            <input
-                              id="siteCode"
-                              placeholder="현장 번호를 입력하세요"
-                            />
-                          </label>
-                          <label class="input-field">
-                            현장명
+                          <div class="worksite-form-row worksite-site-name-field">
+                            <label class="worksite-field-label" for="siteName"
+                              >지점명
+                              <span class="required-star">*</span>
+                            </label>
                             <input
                               id="siteName"
-                              placeholder="예: 강남 본점"
+                              placeholder="강남 본점"
                               required
                             />
-                          </label>
+                            <span class="input-helper"
+                              >지점명을 입력해주세요.</span
+                            >
+                          </div>
+                          <div class="worksite-form-row worksite-site-code-field">
+                            <label class="worksite-field-label" for="siteCode"
+                              >지점코드
+                              <span class="required-star">*</span>
+                            </label>
+                            <input id="siteCode" placeholder="SNTX-GN01" />
+                            <span class="input-helper"
+                              >영문, 숫자, 하이픈(-) 사용 가능 (예:
+                              SNTX-GN01)</span
+                            >
+                          </div>
                           <span
                             id="siteIdError"
                             class="input-error registration-span-full hidden"
@@ -10950,107 +11430,101 @@
                             id="siteNameError"
                             class="input-error registration-span-full hidden"
                           ></span>
-                        </div>
-                      </section>
-
-                      <section class="registration-step-section stack">
-                        <div class="wizard-form-divider">
-                          <strong>2. 기본 정보</strong>
-                          <span>주소, 좌표, 반경 정보를 입력합니다.</span>
-                        </div>
-                        <div class="registration-grid">
-                          <label class="input-field registration-span-full">
-                            주소 검색
+                          <div class="worksite-form-row worksite-address-search">
+                            <label
+                              class="worksite-field-label"
+                              for="siteAddressSearchQuery"
+                              >주소 검색
+                              <span class="required-star">*</span>
+                            </label>
                             <div class="inline-actions">
                               <input
                                 id="siteAddressSearchQuery"
-                                placeholder="주소/장소명 검색 (예: 서울 강남구 ...)"
+                                placeholder="주소를 검색하세요"
                               />
                               <button
                                 class="btn btn-secondary"
                                 type="button"
                                 data-action="site-address-search"
                               >
-                                검색
-                              </button>
-                              <button
-                                class="btn btn-ghost"
-                                type="button"
-                                data-action="site-address-use-query"
-                              >
-                                주소 직접 입력
+                                주소 검색
                               </button>
                             </div>
-                          </label>
+                          </div>
                           <ul
                             id="siteAddressSearchResults"
                             class="list compact-list registration-span-full hidden"
                           ></ul>
 
-                          <div class="inline-actions registration-span-full">
-                            <button
-                              class="btn btn-secondary"
-                              type="button"
-                              data-action="site-use-current-location"
-                            >
-                              현재 위치로 설정
-                            </button>
-                            <button
-                              class="btn btn-secondary"
-                              type="button"
-                              data-action="site-open-map"
-                            >
-                              지도에서 보기
-                            </button>
-                          </div>
-
-                          <label class="input-field registration-span-full">
-                            주소
+                          <div class="worksite-form-row worksite-detail-address-field">
+                            <label class="worksite-field-label" for="siteAddress"
+                              >상세 주소
+                              <span class="required-star">*</span>
+                            </label>
                             <input
                               id="siteAddress"
-                              placeholder="검색 결과 또는 직접 입력"
+                              placeholder="서울특별시 강남구 테헤란로 123, 10층"
                             />
-                          </label>
+                          </div>
                           <input id="sitePlaceId" type="hidden" />
 
-                          <label class="input-field">
-                            위도
+                          <div class="worksite-form-row worksite-contact-field">
+                            <label class="worksite-field-label" for="siteContact"
+                              >연락처</label
+                            >
                             <input
-                              id="siteLatitude"
-                              type="number"
-                              step="0.000001"
-                              inputmode="decimal"
-                              placeholder="위도"
-                              required
+                              id="siteContact"
+                              placeholder="예: 02-1234-5678 (선택사항)"
                             />
-                          </label>
-                          <label class="input-field">
-                            경도
-                            <input
-                              id="siteLongitude"
-                              type="number"
-                              step="0.000001"
-                              inputmode="decimal"
-                              placeholder="경도"
-                              required
-                            />
-                          </label>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section
+                        class="registration-step-section stack worksite-geofence-card"
+                      >
+                        <div class="worksite-geofence-settings">
+                          <div class="wizard-form-divider">
+                            <strong>지오펜스 설정</strong>
+                          </div>
+                          <div class="worksite-coordinate-grid">
+                            <label class="input-field">
+                              <span class="worksite-field-label"
+                                >위치 (Latitude)</span
+                              >
+                              <input
+                                id="siteLatitude"
+                                type="number"
+                                step="0.000001"
+                                inputmode="decimal"
+                                placeholder="37.497942"
+                                required
+                              />
+                            </label>
+                            <label class="input-field">
+                              <span class="worksite-field-label"
+                                >경도 (Longitude)</span
+                              >
+                              <input
+                                id="siteLongitude"
+                                type="number"
+                                step="0.000001"
+                                inputmode="decimal"
+                                placeholder="127.027621"
+                                required
+                              />
+                            </label>
+                          </div>
                           <span
                             id="siteLocationError"
-                            class="input-error registration-span-full hidden"
+                            class="input-error hidden"
                           ></span>
-
-                          <label class="input-field registration-span-full">
-                            반경 (m)
+                          <label class="input-field worksite-radius-field">
+                            <span class="worksite-field-label"
+                              >반경 설정
+                              <span class="required-star">*</span></span
+                            >
                             <div class="site-radius-grid">
-                              <input
-                                id="siteRadiusSlider"
-                                type="range"
-                                min="50"
-                                max="500"
-                                step="10"
-                                value="100"
-                              />
                               <input
                                 id="siteRadius"
                                 type="number"
@@ -11058,54 +11532,143 @@
                                 min="1"
                                 inputmode="numeric"
                                 placeholder="반경(m)"
-                                value="100"
+                                value="150"
                                 required
                               />
+                              <span class="worksite-radius-unit">m</span>
                             </div>
                           </label>
+                          <input
+                            id="siteRadiusSlider"
+                            type="range"
+                            min="50"
+                            max="500"
+                            step="10"
+                            value="150"
+                          />
+                          <div class="worksite-radius-scale">
+                            <span>10m</span>
+                            <span>500m</span>
+                          </div>
+                          <div class="worksite-radius-presets">
+                            <button
+                              class="btn btn-secondary"
+                              type="button"
+                              data-action="site-radius-preset"
+                              data-radius="50"
+                            >
+                              50m
+                            </button>
+                            <button
+                              class="btn btn-secondary"
+                              type="button"
+                              data-action="site-radius-preset"
+                              data-radius="100"
+                            >
+                              100m
+                            </button>
+                            <button
+                              class="btn btn-secondary active"
+                              type="button"
+                              data-action="site-radius-preset"
+                              data-radius="150"
+                            >
+                              150m
+                            </button>
+                            <button
+                              class="btn btn-secondary"
+                              type="button"
+                              data-action="site-radius-preset"
+                              data-radius="200"
+                            >
+                              200m
+                            </button>
+                            <button
+                              class="btn btn-secondary"
+                              type="button"
+                              data-action="site-radius-preset"
+                              data-radius="300"
+                            >
+                              300m
+                            </button>
+                          </div>
                           <span
                             id="siteRadiusError"
-                            class="input-error registration-span-full hidden"
+                            class="input-error hidden"
                           ></span>
-                          <p
-                            id="siteRadiusHint"
-                            class="muted registration-span-full"
-                          >
-                            권장 반경은 50m~500m입니다.
+                          <p id="siteRadiusHint" class="muted">
+                            출퇴근 허용 범위 거리를 설정합니다.
                           </p>
                         </div>
-                      </section>
-
-                      <section
-                        class="registration-step-section registration-step-section-plain stack"
-                      >
-                        <div class="wizard-form-divider">
-                          <strong>3. 검토/저장</strong>
+                        <div class="worksite-geofence-preview">
+                          <div class="wizard-form-divider">
+                            <strong>지오펜스 미리보기</strong>
+                          </div>
+                          <div class="site-map-card map-card">
+                            <div
+                              id="siteGoogleMap"
+                              class="site-google-map"
+                              role="img"
+                              aria-label="현장 위치 미리보기 지도"
+                            ></div>
+                            <div
+                              id="siteGoogleMapFallback"
+                              class="site-map-fallback hidden"
+                            ></div>
+                            <span class="worksite-map-scale">100m</span>
+                            <span id="siteMapRadiusPill">현재 반경 150m</span>
+                          </div>
                         </div>
                       </section>
                     </div>
 
-                    <aside class="registration-rail stack">
-                      <article class="registration-rail-card stack">
-                        <h4>회사 / 현장 요약</h4>
-                        <label class="input-field registration-summary-field">
-                          선택 회사
-                          <input
-                            id="siteCompanyContext"
-                            readonly
-                            placeholder="회사 선택 필요"
-                          />
-                        </label>
+                    <aside class="registration-rail stack worksite-create-rail">
+                      <article
+                        class="registration-rail-card stack worksite-summary-card"
+                      >
+                        <h4>등록 요약</h4>
+                        <input
+                          id="siteCompanyContext"
+                          class="worksite-summary-company-input"
+                          readonly
+                          tabindex="-1"
+                          aria-hidden="true"
+                          placeholder="회사 선택 필요"
+                        />
                         <dl class="registration-summary-list">
                           <div>
-                            <dt>현장 번호</dt>
+                            <dt>회사</dt>
+                            <dd id="siteSummaryCompany">-</dd>
+                          </div>
+                          <div>
+                            <dt>지점명</dt>
+                            <dd id="siteSummaryName">-</dd>
+                          </div>
+                          <div>
+                            <dt>지점코드</dt>
                             <dd id="siteSummaryCode">-</dd>
                           </div>
                           <div>
-                            <dt>현장명</dt>
-                            <dd id="siteSummaryName">-</dd>
+                            <dt>주소</dt>
+                            <dd id="siteSummaryAddress">-</dd>
+                          </div>
+                          <div>
+                            <dt>지오펜스</dt>
+                            <dd id="siteSummaryCoordinates">-</dd>
+                          </div>
+                          <div>
+                            <dt>반경</dt>
+                            <dd id="siteSummaryRadius">-</dd>
                           </div>
                         </dl>
+                        <div class="worksite-required-progress-bar">
+                          <span></span>
+                        </div>
+                        <p id="siteSubmitStatus" class="muted">
+                          <span id="siteRequiredProgress"
+                            >필수 입력 0 / 5 완료</span
+                          >
+                        </p>
                         <div class="registration-inline-meta">
                           <button
                             class="btn btn-secondary hidden"
@@ -11123,56 +11686,70 @@
                         ></span>
                       </article>
 
-                      <article class="registration-rail-card stack">
-                        <h4>지오펜스 미리보기</h4>
-                        <div class="site-map-card map-card">
-                          <div
-                            id="siteGoogleMap"
-                            class="site-google-map"
-                            role="img"
-                            aria-label="현장 위치 미리보기 지도"
-                          ></div>
-                          <div
-                            id="siteGoogleMapFallback"
-                            class="site-map-fallback hidden"
-                          ></div>
-                        </div>
-                        <div class="map-card-labels">
-                          <span class="status-pill status-pill-warn"
-                            >지오펜스 미리보기</span
-                          >
-                          <span
-                            id="siteMapRadiusPill"
-                            class="status-pill status-pill-warn"
-                            >반경 100m</span
-                          >
-                        </div>
+                      <article
+                        class="registration-rail-card stack worksite-process-card"
+                      >
+                        <h4>생성 시 처리 항목</h4>
+                        <ul class="worksite-process-list">
+                          <li>
+                            <span aria-hidden="true">◎</span>
+                            <div>
+                              <strong>근무지 정보 저장</strong>
+                              <small>입력한 근무지 정보를 저장합니다.</small>
+                            </div>
+                          </li>
+                          <li>
+                            <span aria-hidden="true">⌖</span>
+                            <div>
+                              <strong>지오펜스 좌표 저장</strong>
+                              <small
+                                >지오펜스 중심 좌표와 반경을 저장합니다.</small
+                              >
+                            </div>
+                          </li>
+                          <li>
+                            <span aria-hidden="true">◇</span>
+                            <div>
+                              <strong>출퇴근 허용 범위 생성</strong>
+                              <small
+                                >유효한 허용 범위를 지오펜스로 설정합니다.</small
+                              >
+                            </div>
+                          </li>
+                          <li>
+                            <span aria-hidden="true">☷</span>
+                            <div>
+                              <strong>근무지 목록에 추가</strong>
+                              <small
+                                >근무지 목록에 새로운 항목을 추가합니다.</small
+                              >
+                            </div>
+                          </li>
+                        </ul>
                       </article>
 
-                      <div
-                        class="registration-action-rail registration-action-rail-plain stack"
+                      <article
+                        class="registration-rail-card stack worksite-guide-card"
                       >
-                        <p id="siteSubmitStatus" class="muted">
-                          회사/현장 정보가 준비되면 저장할 수 있습니다.
-                        </p>
-                        <div class="registration-action-buttons">
-                          <button
-                            class="btn btn-primary"
-                            id="siteSubmitBtn"
-                            type="button"
-                            data-action="submit-site"
-                          >
-                            저장
-                          </button>
-                          <button
-                            class="btn btn-secondary"
-                            type="button"
-                            data-action="site-editor-close"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      </div>
+                        <h4>입력 가이드</h4>
+                        <ul>
+                          <li>
+                            정확한 주소 입력은 출퇴근 인증의 정확도를 높입니다.
+                          </li>
+                          <li>
+                            지오펜스 반경은 실제 근무지 범위에 맞게
+                            설정하세요.
+                          </li>
+                          <li>
+                            반경이 너무 넓으면 부정 인증 위험이 증가할 수
+                            있습니다.
+                          </li>
+                          <li>
+                            설정 후에도 근무지 정보와 지오펜스 설정을 수정할
+                            수 있습니다.
+                          </li>
+                        </ul>
+                      </article>
                     </aside>
                   </div>
                 </form>
@@ -11441,14 +12018,14 @@
     <script src="config.js"></script>
     <script>
       window.__RG_ARLS_ASSET_BUILD_ID__ =
-        window.ENV_BUILD_ID || "20260428-finance-intro-entry-01";
+        window.ENV_BUILD_ID || "20260517-org-tabs-restore-01";
       window.__RG_ARLS_BOOTED__ = false;
       window.__RG_ARLS_LOGIN_HANDLER__ = null;
       window.ENV_BUILD_ID =
         window.ENV_BUILD_ID || window.__RG_ARLS_ASSET_BUILD_ID__;
       window.ENV_API_BASE =
         window.ENV_API_BASE ||
-        "https://rg-arls-backend.azurewebsites.net";
+        "https://arls-wonseo-prod-260402.azurewebsites.net";
       window.ENV_GOOGLE_MAPS_API_KEY = window.ENV_GOOGLE_MAPS_API_KEY || "";
       window.ENV_KAKAO_JAVASCRIPT_KEY =
         window.ENV_KAKAO_JAVASCRIPT_KEY || "";
@@ -11751,8 +12328,11 @@
         });
 
         window.addEventListener("load", () => {
+          const swBuildId = encodeURIComponent(
+            String(window.ENV_BUILD_ID || Date.now()),
+          );
           navigator.serviceWorker
-            .register("./sw.js?v=20260428-finance-intro-entry-01", {
+            .register(`./sw.js?v=${swBuildId}`, {
               updateViaCache: "none",
             })
             .then((registration) => {
