@@ -103265,3 +103265,31 @@ body[data-current-view="attendance"] #view-attendance .workspace-head-actions .b
   position: static !important;
   transform: none !important;
 }
+
+/* B closeout: attendance-rate indicators need metric weight, not hairline icon weight. */
+body[data-current-view="attendance"] #view-attendance .attendance-daily-ref-kpi-icon.is-rate svg {
+  overflow: visible !important;
+  stroke-width: 0 !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-ref-kpi-icon.is-rate svg .track,
+body[data-current-view="attendance"] #view-attendance .attendance-daily-ref-kpi-icon.is-rate svg .value {
+  stroke-width: 5.6 !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-ref-kpi-icon.is-rate svg .track {
+  stroke: #ffe0cf !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-ref-kpi-icon.is-rate svg .value {
+  stroke: #ff6b00 !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-rate-ring {
+  padding-bottom: 20px !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-rate-ring::before,
+body[data-current-view="attendance"] #view-attendance .attendance-rate-ring::after {
+  height: 8px !important;
+}
