@@ -617,6 +617,45 @@ body[data-current-view="support-status"] .topbar-account-chevron {
   background: #ffffff;
 }
 
+@media (max-width: 1180px) {
+  #view-support-status {
+    padding-inline: 16px;
+  }
+
+  #view-support-status .support-status-filter-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding-inline: 14px;
+  }
+
+  #view-support-status .support-status-period-controls {
+    display: grid;
+    grid-template-columns: 40px 40px minmax(48px, 64px) minmax(128px, 1fr);
+    width: 100%;
+    min-width: 0;
+  }
+
+  #view-support-status .support-status-filter-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+  }
+
+  #view-support-status .support-status-view-switch {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+
+  #view-support-status .support-status-view-tab,
+  #view-support-status .support-status-select-field select,
+  #view-support-status .support-status-month-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .support-status-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -2786,6 +2825,33 @@ body[data-current-view="reports"] .shell-content {
   text-align: center;
   color: var(--text-secondary);
   background: var(--bg-surface);
+}
+
+.admin-table-empty-state {
+  min-height: 180px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 28px 16px;
+}
+
+.admin-table-empty-state .empty-state-icon {
+  margin: 0;
+}
+
+.admin-table-empty-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.admin-table-empty-description {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .table-actions {
@@ -58643,7 +58709,7 @@ html[data-ui-theme="dark"] #view-home .home-summary-icon.is-teal {
   display: grid;
   place-items: center;
   gap: 4px;
-  min-height: 140px;
+  min-height: 240px;
   padding: 24px;
   border: 1px solid #e5eaf0;
   border-radius: 8px;
@@ -58663,6 +58729,37 @@ html[data-ui-theme="dark"] #view-home .home-summary-icon.is-teal {
   font-size: 12px;
   line-height: 1.45;
   font-weight: 500;
+}
+
+#view-attendance .attendance-calendar-empty .attendance-calendar-empty-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: #fff3ed;
+  color: #ff4f0f;
+}
+
+#view-attendance
+  .attendance-calendar-empty
+  .attendance-calendar-empty-icon-svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.9;
+}
+
+#view-attendance .attendance-calendar-empty .attendance-calendar-empty-copy {
+  color: #64748b;
+}
+
+#view-attendance
+  .attendance-calendar-reference-frame.is-empty
+  .attendance-calendar-empty {
+  min-height: 320px;
+  border: 0;
+  border-radius: 0;
 }
 
 #view-attendance .attendance-v2-empty.is-table .attendance-v2-empty-box {
@@ -58710,6 +58807,27 @@ html[data-ui-theme="dark"]
 html[data-ui-theme="dark"] #view-attendance .attendance-v2-empty-box {
   background: rgba(15, 23, 42, 0.52);
   border-color: rgba(255, 122, 26, 0.28);
+}
+
+html[data-ui-theme="dark"] #view-attendance .attendance-calendar-empty {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(71, 85, 105, 0.7);
+  color: #f8fafc;
+}
+
+html[data-ui-theme="dark"]
+  #view-attendance
+  .attendance-calendar-empty
+  .attendance-calendar-empty-icon {
+  background: rgba(255, 122, 26, 0.14);
+  color: #fb923c;
+}
+
+html[data-ui-theme="dark"]
+  #view-attendance
+  .attendance-calendar-empty
+  .attendance-calendar-empty-copy {
+  color: #cbd5e1;
 }
 
 /* 2026-04-10 density + stats reconstruction pass */
@@ -89080,8 +89198,6 @@ body.auth-view-active #authView {
     justify-self: start !important;
   }
 }
-*** End of File
-
 /* Visual Ralph final EOF override: attendance three-tab chrome parity. */
 #view-attendance {
   --attendance-visible-workplane: calc(100vw - 328px);
@@ -101959,4 +102075,1193 @@ body[data-current-view="leave"] .shell-content {
   font-size: 13px;
   line-height: 18px;
   font-weight: 700;
+}
+
+/* 2026-05-18: ARLS design unification contract for topbar-adjacent list screens. */
+:root {
+  --arls-unified-control-height: 42px;
+  --arls-unified-control-radius: 7px;
+  --arls-unified-control-font-size: 14px;
+  --arls-unified-control-line: 20px;
+  --arls-unified-control-weight: 750;
+  --arls-unified-icon-size: 16px;
+  --arls-unified-toolbar-height: 82px;
+  --arls-unified-page-gap: 24px;
+}
+
+#shell.desktop-route-employees-list #view-employees.panel.card.view,
+#shell.desktop-route-sites-list #view-org.panel.card.view,
+#view-dev-console.panel.card.view {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  gap: var(--arls-unified-page-gap) !important;
+  background: transparent !important;
+}
+
+#shell.desktop-route-employees-list #view-employees > .organization-workspace-head,
+#shell.desktop-route-sites-list #view-org > .organization-workspace-head,
+#view-dev-console > .system-workspace-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  min-height: var(--arls-unified-control-height) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  > .organization-workspace-head
+  .workspace-head-main,
+#shell.desktop-route-sites-list
+  #view-org
+  > .organization-workspace-head
+  .workspace-head-main,
+#view-dev-console > .system-workspace-head .workspace-head-main {
+  display: none !important;
+}
+
+#shell.desktop-route-employees-list #view-employees .employee-page-head-actions,
+#shell.desktop-route-sites-list #view-org .site-page-head-actions,
+#view-dev-console .master-company-head-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  margin: 0 0 0 auto !important;
+  flex: 0 0 auto !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-page-head-actions
+  .btn,
+#shell.desktop-route-sites-list #view-org #siteCreateBtn,
+#view-dev-console #masterTenantCreateBtn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  min-width: 118px !important;
+  padding: 0 22px !important;
+  border-radius: var(--arls-unified-control-radius) !important;
+  font-size: var(--arls-unified-control-font-size) !important;
+  line-height: var(--arls-unified-control-line) !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-page-head-actions
+  .btn-primary,
+#shell.desktop-route-sites-list #view-org #siteCreateBtn,
+#view-dev-console #masterTenantCreateBtn {
+  border: 1px solid #ff4f0f !important;
+  background: #ff4f0f !important;
+  color: #fff !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-page-head-actions
+  .btn-secondary {
+  min-width: 112px !important;
+  border: 1px solid #ff4f0f !important;
+  background: #fff !important;
+  color: #ff4f0f !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeToolbar,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid,
+#view-dev-console #masterTenantToolbar {
+  display: grid !important;
+  grid-template-rows: auto !important;
+  grid-template-areas: none !important;
+  grid-auto-rows: auto !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: var(--arls-unified-toolbar-height) !important;
+  height: auto !important;
+  box-sizing: border-box !important;
+  padding: 20px !important;
+  border: 1px solid #dbe3ef !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  gap: 12px !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeToolbar {
+  grid-template-columns:
+    minmax(300px, 1fr)
+    minmax(154px, 194px)
+    minmax(154px, 194px)
+    minmax(154px, 194px) !important;
+}
+
+#shell.desktop-route-sites-list #view-org #siteFilterGrid {
+  grid-template-columns:
+    minmax(300px, 1fr)
+    minmax(154px, 194px)
+    minmax(154px, 194px)
+    minmax(118px, 140px)
+    minmax(0, 1fr) !important;
+}
+
+#view-dev-console #masterTenantToolbar {
+  grid-template-columns:
+    minmax(300px, 1fr)
+    minmax(206px, 240px)
+    minmax(118px, 140px) !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeRoleFilterField,
+#shell.desktop-route-employees-list
+  #view-employees
+  #employeeToolbar
+  .employee-toolbar-actions,
+#shell.desktop-route-employees-list
+  #view-employees
+  #employeeToolbar
+  .employee-toolbar-toggles,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid .site-toolbar-toggles,
+#view-dev-console #masterTenantRefreshBtn,
+#view-dev-console .master-company-table-head-actions,
+#shell.desktop-route-employees-list #view-employees .employee-refresh-btn,
+#shell.desktop-route-employees-list #view-employees .employee-directory-table-head-actions,
+#shell.desktop-route-sites-list #view-org .site-directory-table-head-actions {
+  display: none !important;
+}
+
+#shell.desktop-route-sites-list #view-org #siteFilterGrid .site-toolbar-actions,
+#view-dev-console #masterTenantToolbar .master-company-toolbar-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  margin: 0 !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+}
+
+#view-dev-console #masterTenantToolbar > .master-company-toolbar-search,
+#view-dev-console #masterTenantToolbar > .master-company-status-field,
+#view-dev-console #masterTenantToolbar > .master-company-toolbar-actions {
+  grid-area: auto !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: 100% !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  #employeeToolbar
+  .employee-toolbar-field,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid .site-toolbar-field,
+#view-dev-console #masterTenantToolbar .master-company-toolbar-field {
+  display: block !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  #employeeToolbar
+  .employee-toolbar-field
+  > span,
+#shell.desktop-route-sites-list
+  #view-org
+  #siteFilterGrid
+  .site-toolbar-field
+  > span:not(.sr-only),
+#view-dev-console
+  #masterTenantToolbar
+  .master-company-toolbar-field
+  > span:not(.sr-only):not(.master-company-search-control) {
+  display: none !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeToolbar input,
+#shell.desktop-route-employees-list #view-employees #employeeToolbar select,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid input,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid select,
+#view-dev-console #masterTenantToolbar input,
+#view-dev-console #masterTenantToolbar select,
+#view-dev-console #masterTenantToolbar .master-company-search-control {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  box-sizing: border-box !important;
+  border: 1px solid #d8e0ea !important;
+  border-radius: var(--arls-unified-control-radius) !important;
+  background-color: #fff !important;
+  color: #0f172a !important;
+  font-size: var(--arls-unified-control-font-size) !important;
+  line-height: var(--arls-unified-control-height) !important;
+  font-weight: var(--arls-unified-control-weight) !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeToolbar input,
+#shell.desktop-route-employees-list #view-employees #employeeToolbar select,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid input,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid select,
+#view-dev-console #masterTenantToolbar input {
+  padding: 0 16px !important;
+}
+
+#view-dev-console #masterTenantToolbar .master-company-search-control {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 0 14px !important;
+}
+
+#view-dev-console
+  #masterTenantToolbar
+  .master-company-search-control
+  input {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: var(--arls-unified-control-height) !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  #employeeToolbar
+  input::placeholder,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid input::placeholder,
+#view-dev-console #masterTenantToolbar input::placeholder {
+  color: #7b8798 !important;
+  font-weight: var(--arls-unified-control-weight) !important;
+}
+
+#shell.desktop-route-sites-list
+  #view-org
+  #siteFilterGrid
+  .site-toolbar-actions
+  .btn,
+#view-dev-console #masterTenantToolbar .master-company-filter-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 112px !important;
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  padding: 0 16px !important;
+  border: 1px solid #d8e0ea !important;
+  border-radius: var(--arls-unified-control-radius) !important;
+  background: #fff !important;
+  color: #243144 !important;
+  font-size: var(--arls-unified-control-font-size) !important;
+  line-height: var(--arls-unified-control-line) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeToolbar svg,
+#shell.desktop-route-sites-list #view-org #siteFilterGrid svg,
+#view-dev-console #masterTenantToolbar svg,
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-page-head-actions
+  svg,
+#shell.desktop-route-sites-list #view-org #siteCreateBtn svg,
+#view-dev-console #masterTenantCreateBtn svg {
+  width: var(--arls-unified-icon-size) !important;
+  height: var(--arls-unified-icon-size) !important;
+  stroke-width: 1.9 !important;
+}
+
+#view-dev-console #masterTenantToolbar .master-status-segment {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  overflow: hidden !important;
+  border: 1px solid #d8e0ea !important;
+  border-radius: var(--arls-unified-control-radius) !important;
+  background: #fff !important;
+}
+
+#view-dev-console #masterTenantToolbar .master-status-tab {
+  height: var(--arls-unified-control-height) !important;
+  min-height: var(--arls-unified-control-height) !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #243144 !important;
+  font-size: var(--arls-unified-control-font-size) !important;
+  line-height: var(--arls-unified-control-line) !important;
+  font-weight: 800 !important;
+  box-shadow: none !important;
+}
+
+#view-dev-console #masterTenantToolbar .master-status-tab + .master-status-tab {
+  border-left: 1px solid #d8e0ea !important;
+}
+
+#view-dev-console #masterTenantToolbar .master-status-tab.active {
+  border-color: transparent !important;
+  background: #fff3ed !important;
+  color: #ff4f0f !important;
+}
+
+#shell.desktop-route-employees-list #view-employees #employeeDesktopTableCard,
+#shell.desktop-route-sites-list #view-org #siteDesktopTableCard,
+#view-dev-console .master-company-table-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 20px 20px 0 !important;
+  border: 1px solid #dbe3ef !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-directory-table-head,
+#shell.desktop-route-sites-list #view-org .site-directory-table-head,
+#view-dev-console .master-company-table-head {
+  min-height: 42px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+}
+
+#shell.desktop-route-employees-list
+  #view-employees
+  .employee-directory-table-head
+  h3,
+#shell.desktop-route-sites-list #view-org .site-directory-table-head h3,
+#view-dev-console .master-company-table-head h3 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 18px !important;
+  line-height: 24px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+}
+
+@media (max-width: 1180px) {
+  #shell.desktop-route-employees-list #view-employees #employeeToolbar,
+  #shell.desktop-route-sites-list #view-org #siteFilterGrid {
+    grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(116px, 150px)) !important;
+    grid-template-rows: auto !important;
+  }
+
+  #view-dev-console #masterTenantToolbar {
+    grid-template-columns:
+      minmax(190px, 1fr)
+      minmax(158px, 186px)
+      minmax(116px, 140px) !important;
+    grid-template-rows: auto !important;
+  }
+
+  #shell.desktop-route-employees-list
+    #view-employees
+    #employeeToolbar
+    .employee-toolbar-search-field,
+  #shell.desktop-route-employees-list
+    #view-employees
+    #employeeToolbar
+    .employee-toolbar-actions,
+  #shell.desktop-route-employees-list
+    #view-employees
+    #employeeToolbar
+    .employee-toolbar-toggles,
+  #shell.desktop-route-sites-list
+    #view-org
+    #siteFilterGrid
+    .site-toolbar-actions,
+  #view-dev-console #masterTenantToolbar .master-company-toolbar-actions {
+    grid-column: auto !important;
+  }
+}
+
+/* 2026-05-19 UI hierarchy cleanup contract. */
+:root {
+  --arls-hierarchy-control-height: 40px;
+  --arls-hierarchy-control-radius: 7px;
+  --arls-hierarchy-control-font-size: 14px;
+  --arls-hierarchy-control-weight: 650;
+  --arls-hierarchy-icon-size: 16px;
+  --arls-hierarchy-icon-stroke: 1.9;
+  --arls-hierarchy-title-weight: 700;
+}
+
+#topbarPageTitle,
+.topbar-page-title,
+.topbar-title,
+.app-topbar-title {
+  font-size: 18px !important;
+  line-height: 24px !important;
+  font-weight: var(--arls-hierarchy-title-weight) !important;
+  letter-spacing: 0 !important;
+}
+
+.workspace-head-main h1,
+.page-title,
+.section-page-title,
+.dashboard-page-title {
+  font-size: 24px !important;
+  line-height: 32px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+}
+
+.workspace-head-main p,
+.page-subtitle,
+.section-page-subtitle,
+.dashboard-page-subtitle {
+  font-size: 14px !important;
+  line-height: 21px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.ui-filterbar input,
+.ui-filterbar select,
+.ui-filterbar button,
+.command-bar input,
+.command-bar select,
+.command-bar button,
+.employee-toolbar input,
+.employee-toolbar select,
+.employee-toolbar button,
+.site-filter-grid input,
+.site-filter-grid select,
+.site-filter-grid button,
+.attendance-ops-toolbar input,
+.attendance-ops-toolbar select,
+.attendance-ops-toolbar button,
+.requests-filter-controls input,
+.requests-filter-controls select,
+.requests-filter-controls button,
+.leave-requests-filter-controls input,
+.leave-requests-filter-controls select,
+.leave-requests-filter-controls button,
+.schedule-filter-row input,
+.schedule-filter-row select,
+.schedule-filter-row button {
+  min-height: var(--arls-hierarchy-control-height) !important;
+  height: var(--arls-hierarchy-control-height) !important;
+  border-radius: var(--arls-hierarchy-control-radius) !important;
+  font-size: var(--arls-hierarchy-control-font-size) !important;
+  line-height: 20px !important;
+  font-weight: var(--arls-hierarchy-control-weight) !important;
+  letter-spacing: 0 !important;
+}
+
+.ui-filterbar svg,
+.command-bar svg,
+.employee-toolbar svg,
+.site-filter-grid svg,
+.attendance-ops-toolbar svg,
+.requests-filter-controls svg,
+.leave-requests-filter-controls svg,
+.schedule-filter-row svg,
+.workspace-head-actions svg,
+.page-actions svg,
+.btn svg {
+  width: var(--arls-hierarchy-icon-size) !important;
+  height: var(--arls-hierarchy-icon-size) !important;
+  stroke-width: var(--arls-hierarchy-icon-stroke) !important;
+  flex: 0 0 auto !important;
+}
+
+.workspace-head-actions .btn,
+.workspace-head-actions button,
+.page-actions .btn,
+.page-actions button,
+.employee-page-head-actions .btn,
+.site-page-head-actions .btn,
+.master-company-head-actions .btn,
+.attendance-toolbar-actions .btn,
+.leave-page-actions .btn,
+.requests-page-actions .btn,
+.schedule-page-actions .btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  min-height: var(--arls-hierarchy-control-height) !important;
+  height: var(--arls-hierarchy-control-height) !important;
+  padding: 0 16px !important;
+  border-radius: var(--arls-hierarchy-control-radius) !important;
+  font-size: var(--arls-hierarchy-control-font-size) !important;
+  line-height: 20px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+}
+
+.modal-sheet .sheet-actions .btn,
+.modal-sheet .sheet-actions button,
+.modal .modal-actions .btn,
+.modal .modal-actions button,
+.dialog-actions .btn,
+.dialog-actions button,
+.drawer-footer .btn,
+.drawer-footer button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  min-height: var(--arls-hierarchy-control-height) !important;
+  height: var(--arls-hierarchy-control-height) !important;
+  padding: 0 18px !important;
+  font-size: var(--arls-hierarchy-control-font-size) !important;
+  line-height: 20px !important;
+  font-weight: 700 !important;
+}
+
+.modal-sheet .sheet-actions .btn svg,
+.modal-sheet .sheet-actions button svg,
+.modal .modal-actions .btn svg,
+.modal .modal-actions button svg,
+.dialog-actions .btn svg,
+.dialog-actions button svg,
+.drawer-footer .btn svg,
+.drawer-footer button svg {
+  display: none !important;
+}
+
+.modal-sheet .sheet-title,
+.modal-sheet .modal-title,
+.modal .modal-title,
+.drawer-title,
+.sheet-layout-title {
+  font-size: 20px !important;
+  line-height: 28px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0 !important;
+}
+
+.modal-sheet .sheet-subtitle,
+.modal-sheet .modal-subtitle,
+.modal .modal-subtitle,
+.drawer-subtitle,
+.sheet-layout-subtitle,
+.sheet-layout-helper {
+  font-size: 14px !important;
+  line-height: 21px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+}
+
+.modal-sheet label,
+.modal label,
+.drawer label,
+.sheet-layout label,
+.field-label {
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+.modal-sheet input,
+.modal-sheet select,
+.modal-sheet textarea,
+.modal input,
+.modal select,
+.modal textarea,
+.drawer input,
+.drawer select,
+.drawer textarea,
+.sheet-layout input,
+.sheet-layout select,
+.sheet-layout textarea {
+  font-size: 14px !important;
+  font-weight: 550 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-attendance #attendanceWorkspaceTabs,
+#view-attendance .attendance-unified-topbar,
+#view-attendance #attendanceWorkspaceSubnav,
+#view-attendance #attendancePeriodModeInlineTabs {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* B follow-up: exact segmented hit areas, single filter icons, and unified orange actions. */
+#view-attendance {
+  --attendance-active: #ff6b00 !important;
+  --attendance-active-soft: #fff7ed !important;
+  --attendance-control-border: #dbe3ec !important;
+}
+
+#view-attendance .attendance-daily-status-chips,
+#view-attendance #attendanceDailyStatusChips,
+#view-attendance #attendancePeriodStatusChips {
+  display: inline-flex !important;
+  align-items: stretch !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  box-sizing: border-box !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border: 1px solid var(--attendance-control-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+#view-attendance .attendance-daily-status-chip,
+#view-attendance .attendance-period-status-chip {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  margin: 0 !important;
+  padding: 0 20px !important;
+  border: 0 !important;
+  border-right: 1px solid #e7edf4 !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+#view-attendance .attendance-daily-status-chip {
+  min-width: 92px !important;
+}
+
+#view-attendance .attendance-period-status-chip {
+  min-width: 104px !important;
+}
+
+#view-attendance .attendance-daily-status-chip:last-child,
+#view-attendance .attendance-period-status-chip:last-child {
+  border-right: 0 !important;
+}
+
+#view-attendance .attendance-daily-status-chip.is-active,
+#view-attendance .attendance-period-status-chip.is-active {
+  background: var(--attendance-active-soft) !important;
+  color: var(--attendance-active) !important;
+  box-shadow: none !important;
+  z-index: 1 !important;
+}
+
+#view-attendance .attendance-daily-status-chip.is-active::before,
+#view-attendance .attendance-daily-status-chip.is-active::after,
+#view-attendance .attendance-period-status-chip.is-active::before,
+#view-attendance .attendance-period-status-chip.is-active::after {
+  display: none !important;
+  content: none !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger::before {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  content: none !important;
+  mask: none !important;
+  -webkit-mask: none !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger,
+#view-attendance .attendance-filter-trigger,
+#view-attendance .attendance-unified-topbar .workspace-head-actions .btn,
+#view-attendance .workspace-head-actions .btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger .arls-attendance-icon,
+#view-attendance .attendance-filter-trigger .arls-attendance-icon,
+#view-attendance .attendance-unified-topbar .workspace-head-actions .btn .arls-attendance-icon,
+#view-attendance .workspace-head-actions .btn .arls-attendance-icon {
+  position: static !important;
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  transform: none !important;
+  stroke-width: 1.75 !important;
+}
+
+#view-attendance .attendance-advanced-filter-btn.is-primary,
+#view-attendance .attendance-unified-topbar .workspace-head-actions .btn:first-child {
+  border-color: var(--attendance-active) !important;
+  background: var(--attendance-active) !important;
+  color: #ffffff !important;
+}
+
+#view-attendance .attendance-advanced-filter-tab.is-active {
+  color: var(--attendance-active) !important;
+}
+
+#view-attendance .attendance-advanced-filter-tab.is-active::after {
+  background: var(--attendance-active) !important;
+}
+
+#view-attendance .attendance-advanced-filter-select-all input:checked,
+#view-attendance .attendance-advanced-filter-check-row input:checked,
+#view-attendance .attendance-advanced-filter-select-all input:indeterminate,
+#view-attendance .attendance-advanced-filter-check-row input:indeterminate {
+  border-color: var(--attendance-active) !important;
+  background-color: var(--attendance-active) !important;
+}
+
+#view-attendance .attendance-advanced-filter-side-card strong em,
+#view-attendance .attendance-calendar-count,
+#view-attendance .attendance-period-calendar-day.is-today .attendance-period-calendar-date {
+  color: var(--attendance-active) !important;
+}
+
+#view-attendance .attendance-period-calendar-day.is-selected,
+#view-attendance .attendance-period-calendar-day.is-today {
+  border-color: rgba(255, 107, 0, 0.42) !important;
+}
+
+#view-attendance .attendance-advanced-filter-empty-icon {
+  display: grid !important;
+  place-items: center !important;
+  width: 72px !important;
+  height: 72px !important;
+}
+
+#view-attendance .attendance-advanced-filter-empty-icon .arls-attendance-icon {
+  position: static !important;
+  width: 42px !important;
+  height: 42px !important;
+  stroke-width: 1.7 !important;
+  transform: none !important;
+}
+
+#view-attendance .attendance-advanced-filter-empty-icon .arls-attendance-icon + .arls-attendance-icon {
+  display: none !important;
+}
+
+#view-attendance .attendance-daily-ref-kpi-icon svg,
+#view-attendance .attendance-period-ref-kpi-icon svg,
+#view-attendance .attendance-stats-ref-kpi-icon svg,
+#view-attendance .attendance-v2-card-icon svg {
+  stroke-width: 1.65 !important;
+}
+
+#view-attendance > .attendance-workspace-head,
+#view-attendance .attendance-workspace-head.is-titleless {
+  min-height: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+}
+
+#view-attendance .attendance-workspace-head .workspace-head-main,
+#view-attendance .attendance-workspace-head .workspace-head-actions {
+  display: none !important;
+}
+
+#view-attendance #attendanceShellTopCard {
+  margin-top: 0 !important;
+}
+
+#view-attendance #attendanceOpsToolbar {
+  margin-top: 0 !important;
+}
+
+#view-attendance .attendance-period-calendar,
+#view-attendance .attendance-period-calendar-grid,
+#view-attendance .attendance-period-calendar-table,
+#view-attendance .attendance-calendar-grid {
+  border-color: #dbe3ef !important;
+  box-shadow: none !important;
+}
+
+#view-attendance .attendance-period-calendar th,
+#view-attendance .attendance-period-calendar td,
+#view-attendance .attendance-calendar-grid th,
+#view-attendance .attendance-calendar-grid td,
+#view-attendance [class*="calendar-day"],
+#view-attendance [class*="calendar-date"] {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+#view-attendance .attendance-period-calendar [class*="day-number"],
+#view-attendance .attendance-calendar-grid [class*="day-number"],
+#view-attendance .attendance-period-calendar [class*="date-number"],
+#view-attendance .attendance-calendar-grid [class*="date-number"] {
+  font-size: 16px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+}
+
+:where(
+    .empty-state,
+    .empty-state-card,
+    .empty-state-panel,
+    .table-empty,
+    .calendar-empty,
+    .attendance-v2-empty,
+    .hr-procedure-main-empty,
+    .requests-compact-empty,
+    .document-empty-state
+  ) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 220px !important;
+  gap: 12px !important;
+  text-align: center !important;
+}
+
+:where(
+    .empty-state,
+    .empty-state-card,
+    .empty-state-panel,
+    .table-empty,
+    .calendar-empty,
+    .attendance-v2-empty,
+    .hr-procedure-main-empty,
+    .requests-compact-empty,
+    .document-empty-state
+  )
+  :is(svg, img, .empty-state-icon, .empty-icon) {
+  width: 40px !important;
+  height: 40px !important;
+  stroke-width: var(--arls-hierarchy-icon-stroke) !important;
+  object-fit: contain !important;
+}
+
+:where(
+    .empty-state,
+    .empty-state-card,
+    .empty-state-panel,
+    .table-empty,
+    .calendar-empty,
+    .attendance-v2-empty,
+    .hr-procedure-main-empty,
+    .requests-compact-empty,
+    .document-empty-state
+  )
+  :is(strong, h2, h3, p) {
+  margin: 0 !important;
+  letter-spacing: 0 !important;
+}
+
+:where(
+    .empty-state,
+    .empty-state-card,
+    .empty-state-panel,
+    .table-empty,
+    .calendar-empty,
+    .attendance-v2-empty,
+    .hr-procedure-main-empty,
+    .requests-compact-empty,
+    .document-empty-state
+  )
+  :is(strong, h2, h3) {
+  font-size: 17px !important;
+  line-height: 24px !important;
+  font-weight: 750 !important;
+}
+
+:where(
+    .empty-state,
+    .empty-state-card,
+    .empty-state-panel,
+    .table-empty,
+    .calendar-empty,
+    .attendance-v2-empty,
+    .hr-procedure-main-empty,
+    .requests-compact-empty,
+    .document-empty-state
+  )
+  p {
+  font-size: 14px !important;
+  line-height: 21px !important;
+  font-weight: 500 !important;
+}
+
+html[data-ui-theme="dark"] .ui-filterbar input,
+html[data-ui-theme="dark"] .ui-filterbar select,
+html[data-ui-theme="dark"] .ui-filterbar button,
+html[data-ui-theme="dark"] .command-bar input,
+html[data-ui-theme="dark"] .command-bar select,
+html[data-ui-theme="dark"] .command-bar button,
+html[data-ui-theme="dark"] .employee-toolbar input,
+html[data-ui-theme="dark"] .employee-toolbar select,
+html[data-ui-theme="dark"] .employee-toolbar button,
+html[data-ui-theme="dark"] .site-filter-grid input,
+html[data-ui-theme="dark"] .site-filter-grid select,
+html[data-ui-theme="dark"] .site-filter-grid button,
+html[data-ui-theme="dark"] .attendance-ops-toolbar input,
+html[data-ui-theme="dark"] .attendance-ops-toolbar select,
+html[data-ui-theme="dark"] .attendance-ops-toolbar button {
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  background: rgba(15, 23, 42, 0.92) !important;
+  color: #e5edf7 !important;
+}
+
+@media (max-width: 1180px) {
+  .workspace-head-actions .btn,
+  .workspace-head-actions button,
+  .page-actions .btn,
+  .page-actions button,
+  .employee-page-head-actions .btn,
+  .site-page-head-actions .btn,
+  .master-company-head-actions .btn,
+  .attendance-toolbar-actions .btn {
+    padding-inline: 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* B final guard: keep segmented controls exact and action icons single/centered. */
+#view-attendance .attendance-daily-status-chips,
+#view-attendance #attendanceDailyStatusChips,
+#view-attendance #attendancePeriodStatusChips {
+  display: inline-flex !important;
+  align-items: stretch !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid var(--attendance-control-border, #dbe3ec) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+#view-attendance .attendance-daily-status-chip,
+#view-attendance .attendance-period-status-chip {
+  margin: 0 !important;
+  border: 0 !important;
+  border-right: 1px solid #e7edf4 !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+#view-attendance .attendance-daily-status-chip:last-child,
+#view-attendance .attendance-period-status-chip:last-child {
+  border-right: 0 !important;
+}
+
+#view-attendance .attendance-daily-status-chip.is-active,
+#view-attendance .attendance-period-status-chip.is-active {
+  background: #fff7ed !important;
+  color: #ff6b00 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+#view-attendance .attendance-daily-status-chip.is-active::before,
+#view-attendance .attendance-daily-status-chip.is-active::after,
+#view-attendance .attendance-period-status-chip.is-active::before,
+#view-attendance .attendance-period-status-chip.is-active::after,
+#view-attendance .attendance-advanced-filter-trigger::before,
+#view-attendance .attendance-advanced-filter-trigger::after {
+  display: none !important;
+  content: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  mask: none !important;
+  -webkit-mask: none !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger .arls-attendance-icon + .arls-attendance-icon {
+  display: none !important;
+}
+
+#view-attendance .workspace-head-actions .btn,
+#view-attendance #attendanceCorrectionBtn,
+#view-attendance #attendanceExportBtn,
+#view-attendance [data-action="attendance-refresh"],
+#view-attendance .attendance-filter-trigger,
+#view-attendance .attendance-advanced-filter-trigger {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  vertical-align: middle !important;
+}
+
+#view-attendance .attendance-button-icon,
+#view-attendance .attendance-filter-trigger > .arls-attendance-icon,
+#view-attendance .workspace-head-actions .btn .arls-attendance-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  line-height: 0 !important;
+}
+
+#view-attendance .attendance-button-icon .arls-attendance-icon,
+#view-attendance .attendance-filter-trigger > .arls-attendance-icon,
+#view-attendance .workspace-head-actions .btn .arls-attendance-icon {
+  width: 18px !important;
+  height: 18px !important;
+  stroke-width: 1.75 !important;
+}
+
+#view-attendance #attendanceShellTopCard,
+#view-attendance #attendanceOpsToolbar {
+  margin-top: 0 !important;
+}
+
+#view-attendance .attendance-ops-toolbar-main,
+#view-attendance .attendance-filter-cluster,
+#view-attendance .attendance-ops-toolbar-shared {
+  align-items: center !important;
+}
+
+#view-attendance #attendanceCorrectionBtn,
+#view-attendance .workspace-head-actions .btn.btn-primary {
+  border-color: #ff6b00 !important;
+  background: #ff6b00 !important;
+  color: #ffffff !important;
+}
+
+/* B final guard: tighten attendance vertical rhythm and exact segmented hit areas. */
+#view-attendance[data-attendance-section] {
+  padding-top: 14px !important;
+  row-gap: 12px !important;
+}
+
+#view-attendance[data-attendance-section] #attendanceManagerShell {
+  align-self: start !important;
+  margin-top: 0 !important;
+}
+
+#view-attendance[data-attendance-section] #attendanceShellTopCard {
+  gap: 12px !important;
+}
+
+#view-attendance[data-attendance-section] #attendanceManagerWorkspace,
+#view-attendance #attendanceManagerWorkspace.is-attendance-v2-status {
+  margin-top: 12px !important;
+}
+
+#view-attendance .attendance-daily-status-chip,
+#view-attendance .attendance-period-status-chip {
+  position: relative !important;
+  box-sizing: border-box !important;
+  align-self: stretch !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 18px !important;
+  line-height: 1 !important;
+}
+
+#view-attendance .attendance-daily-status-chip.is-active,
+#view-attendance .attendance-period-status-chip.is-active {
+  border-left: 0 !important;
+}
+
+#view-attendance .attendance-advanced-filter-trigger svg,
+#view-attendance #attendanceCorrectionBtn svg {
+  display: block !important;
+  overflow: visible !important;
+}
+
+@media (max-width: 1180px) {
+  #view-attendance[data-attendance-section] {
+    padding-top: 12px !important;
+  }
+}
+
+/* B closeout: remove leftover attendance route top drift without changing menu structure. */
+body[data-current-view="attendance"] .shell-content {
+  padding-top: 14px !important;
+}
+
+body[data-current-view="attendance"] #view-attendance[data-attendance-section] {
+  padding-top: 0 !important;
+}
+
+body[data-current-view="attendance"] #view-attendance #attendanceManagerShell {
+  gap: 12px !important;
+}
+
+body[data-current-view="attendance"] #view-attendance #attendanceManagerWorkspace,
+body[data-current-view="attendance"] #view-attendance #attendanceStatsPanel,
+body[data-current-view="attendance"] #view-attendance #attendanceCalendarPanel {
+  margin-top: 12px !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-status-chips,
+body[data-current-view="attendance"] #view-attendance #attendanceDailyStatusChips,
+body[data-current-view="attendance"] #view-attendance #attendancePeriodStatusChips {
+  align-items: stretch !important;
+  isolation: isolate !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-status-chip,
+body[data-current-view="attendance"] #view-attendance .attendance-period-status-chip {
+  height: auto !important;
+  min-height: 100% !important;
+  transform: none !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-daily-status-chip.is-active,
+body[data-current-view="attendance"] #view-attendance .attendance-period-status-chip.is-active {
+  background-clip: padding-box !important;
+}
+
+body[data-current-view="attendance"] #view-attendance .attendance-button-icon,
+body[data-current-view="attendance"] #view-attendance .attendance-filter-trigger > .arls-attendance-icon,
+body[data-current-view="attendance"] #view-attendance .workspace-head-actions .btn .arls-attendance-icon {
+  position: static !important;
+  transform: none !important;
 }
